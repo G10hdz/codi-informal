@@ -1,12 +1,14 @@
 # codi-informal
 
-Capa de pagos con CoDi para tianguis y tandas. Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026.
+Bot de WhatsApp que cobra con CoDi. Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026.
 
-La idea, el corte de mañana y las reglas de entrega están en [IDEA.md](IDEA.md).
+No hay frontend. El dueño escribe o manda una nota de voz, el bot pide el push o el QR a pey, y cuando el pago entra se lo avisa en el mismo chat.
+
+La idea y el corte están en [IDEA.md](IDEA.md). Los campos de la API que sí usamos están en [docs/pey-api.md](docs/pey-api.md).
 
 ## Estado
 
-Esqueleto. Todavía no hay código de cobro.
+Esqueleto del bot. Falta la API key de pey y el token de WhatsApp para cobrar de verdad.
 
 ## Equipo
 
@@ -17,5 +19,7 @@ Esqueleto. Todavía no hay código de cobro.
 
 ## Documentación de pey
 
-- Portal: https://portal.pey.mx
-- API: https://docs.pey.mx
+- Lo que usa este repo: [docs/pey-api.md](docs/pey-api.md)
+- Referencia: https://docs.pey.mx
+- Portal del correo del hackatón: https://portal.pey.mx
+- Portal de la doc de pey, donde se configura el webhook: https://portal.mipey.mx/developers

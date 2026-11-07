@@ -22,15 +22,18 @@ CoDi pide cuenta de banco. El comercio informal no necesita estar dado de alta e
 
 ## Corte de este hackatón
 
-Lo que se puede enseñar antes del domingo a la 1:00 p.m.:
+No hay frontend. Quien cobra y quien prueba hablan con un bot de WhatsApp.
 
-1. Cobro CoDi por push a un puesto. El dueño ausente recibe el aviso.
-2. Registro de ese pago, con comprobante, sin foto ni llamada.
-3. Si da el tiempo, una tanda de prueba donde el pago no depende de que alguien guarde el efectivo.
+1. El dueño escribe, o manda una nota de voz: `cobra 0.01 al 5512345678`. El bot pide a pey un push de CoDi. A quien paga le llega el aviso en la app de su banco.
+2. El bot también puede armar el QR del puesto y mandarlo por el mismo chat, para dejarlo pegado. Si el dueño no está, el pago igual entra.
+3. Cuando pey avisa que el pago llegó, el bot se lo dice al dueño por WhatsApp y lo guarda. Sin foto del ticket y sin llamada.
+4. El tope de prueba es $0.01. Esos pagos no se devuelven. Subirlo es cambiar `PEY_MAX_AMOUNT`.
 
-Compras colectivas y la red de puntos se cuentan en el pitch como el siguiente uso de la misma capa. No se construyen las dos completas hoy.
+La nota de voz no es otra pantalla: es el mismo bot. Si todavía no hay llave para transcribir, el bot pide el mensaje escrito.
 
-Altagracia no escribe código. Prueba el flujo como lo usaría alguien del puesto o de la tanda, y dice si se entiende. Si ella se atora, el flujo no está listo.
+La tanda automática, las compras colectivas y la red de puntos se cuentan en el pitch como el siguiente uso de esta misma capa. No se construyen completas hoy.
+
+Altagracia no escribe código. Prueba el bot como lo usaría alguien del puesto: manda el mensaje, ve si se entiende y dice dónde se atora. Si ella se atora, el flujo no está listo.
 
 ## Entrega
 
@@ -44,6 +47,7 @@ Altagracia no escribe código. Prueba el flujo como lo usaría alguien del puest
 
 ## Fuera de alcance
 
+- Una página o una app. El corte es el bot de WhatsApp.
 - Otra app de tandas.
-- Otro QR genérico, sin el caso del dueño ausente.
-- NFC, agente de voz y teclado de WhatsApp. Salieron en la junta y se quedan anotados. No entran al corte de mañana.
+- NFC. Salió en la junta y se queda anotado.
+- Verificación de identidad por voz ante Banxico. pey no tiene ese endpoint. La voz aquí solo dicta el cobro.
