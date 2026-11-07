@@ -37,6 +37,10 @@ def firmar(cuerpo: bytes) -> dict:
     }
 
 
+def firmar_whatsapp(cuerpo: bytes, secreto: str) -> str:
+    return "sha256=" + hmac.new(secreto.encode(), cuerpo, hashlib.sha256).hexdigest()
+
+
 class PeyTests(unittest.TestCase):
     def test_push_arma_el_cuerpo_documentado(self):
         visto = {}
@@ -163,7 +167,8 @@ class BotTests(unittest.TestCase):
             config.pey_webhook_secret = SECRETO
             config.whatsapp_token = ""
             config.whatsapp_verify_token = "verificar"
-            config.owner_whatsapp = ""
+            config.whatsapp_app_secret = "secreto-meta"
+            config.owner_whatsapp = "5512345678"
             config.registro_path = os.path.join(carpeta, "r.sqlite")
             config.host = "127.0.0.1"
             config.port = 0
@@ -211,6 +216,40 @@ class BotTests(unittest.TestCase):
                 urllib.request.urlopen(malo)
             self.assertEqual(ctx.exception.code, 401)
             self.assertEqual(len(listar(abrir(config.registro_path))), 1)
+
+            evento_whatsapp = {
+                "entry": [{"changes": [{"value": {"messages": [{
+                    "from": "5215512345678", "type": "text",
+                    "text": {"body": "qué se ha cobrado"},
+                }]}}]}]
+            }
+            crudo_whatsapp = json.dumps(evento_whatsapp).encode()
+            headers_whatsapp = {
+                "Content-Type": "application/json",
+                "X-Hub-Signature-256": firmar_whatsapp(crudo_whatsapp, config.whatsapp_app_secret),
+            }
+            respuesta = urllib.request.urlopen(urllib.request.Request(
+                base + "/webhooks/whatsapp", data=crudo_whatsapp, headers=headers_whatsapp
+            ))
+            self.assertTrue(json.load(respuesta)["ok"])
+
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(urllib.request.Request(
+                    base + "/webhooks/whatsapp", data=crudo_whatsapp,
+                    headers={"Content-Type": "application/json"},
+                ))
+            self.assertEqual(ctx.exception.code, 401)
+
+            desconocido = crudo_whatsapp.replace(b"5215512345678", b"5215587654321")
+            headers_desconocido = {
+                "Content-Type": "application/json",
+                "X-Hub-Signature-256": firmar_whatsapp(desconocido, config.whatsapp_app_secret),
+            }
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(urllib.request.Request(
+                    base + "/webhooks/whatsapp", data=desconocido, headers=headers_desconocido
+                ))
+            self.assertEqual(ctx.exception.code, 403)
 
 
 if __name__ == "__main__":

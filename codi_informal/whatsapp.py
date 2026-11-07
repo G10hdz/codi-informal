@@ -1,5 +1,15 @@
 """WhatsApp Cloud API. El bot vive en el chat: texto, nota de voz y la imagen del QR."""
 
+import hashlib
+import hmac
+
+
+def firma_valida(secreto: str, cuerpo: bytes, firma: str) -> bool:
+    if not secreto or not firma.startswith("sha256="):
+        return False
+    esperada = hmac.new(secreto.encode(), cuerpo, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(esperada, firma.removeprefix("sha256="))
+
 
 def extraer(payload: dict) -> dict:
     vacio = {"tipo": "vacio", "texto": None, "de": None, "audio_id": None}
