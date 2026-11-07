@@ -7,6 +7,6 @@ data/
 *.sqlite
 .DS_Store
 *.pem
-
+avances/
 __pycache__/
 *.pyc
