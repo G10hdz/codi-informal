@@ -9,7 +9,7 @@ from codi_informal.agente import Agente, atender
 from codi_informal.firma import FirmaInvalida, verificar
 from codi_informal.pey import Pey
 from codi_informal.registro import abrir, aviso, registrar_pago
-from codi_informal.whatsapp import extraer
+from codi_informal.whatsapp import extraer, firma_valida
 
 
 class Config:
@@ -22,6 +22,7 @@ class Config:
         self.whatsapp_token = os.environ.get("WHATSAPP_TOKEN", "")
         self.whatsapp_phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
         self.whatsapp_verify_token = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
+        self.whatsapp_app_secret = os.environ.get("WHATSAPP_APP_SECRET", "")
         self.owner_whatsapp = os.environ.get("OWNER_WHATSAPP", "")
         self.registro_path = os.environ.get("REGISTRO_PATH", "data/registro.sqlite")
         self.host = os.environ.get("HOST", "127.0.0.1")
@@ -90,12 +91,25 @@ def handler(config: Config, conn, pey):
             self._json(200, {"texto": resultado.texto, "tiene_imagen": resultado.imagen is not None})
 
         def _whatsapp(self, cuerpo: bytes):
+            if not firma_valida(
+                config.whatsapp_app_secret,
+                cuerpo,
+                self.headers.get("X-Hub-Signature-256", ""),
+            ):
+                self._json(401, {"error": "webhook rechazado"})
+                return
             try:
                 data = json.loads(cuerpo.decode() or "{}")
             except json.JSONDecodeError:
                 self._json(400, {"error": "json inválido"})
                 return
             entrada = extraer(data)
+            if entrada.get("tipo") == "status":
+                self._json(200, {"ok": True})
+                return
+            if not _mismo_telefono(entrada.get("de"), config.owner_whatsapp):
+                self._json(403, {"error": "remitente no autorizado"})
+                return
             resultado = atender(entrada, agente)
             if resultado and resultado.texto and entrada.get("de"):
                 self._avisar(entrada["de"], resultado.texto)
@@ -180,6 +194,18 @@ def handler(config: Config, conn, pey):
             self.wfile.write(crudo)
 
     return Bot
+
+
+def _mismo_telefono(uno, otro) -> bool:
+    def digitos(valor):
+        numero = "".join(c for c in str(valor or "") if c.isdigit())
+        if len(numero) == 13 and numero.startswith("521"):
+            return numero[3:]
+        if len(numero) == 12 and numero.startswith("52"):
+            return numero[2:]
+        return numero
+
+    return bool(uno and otro) and digitos(uno) == digitos(otro)
 
 
 def servir(config: Config | None = None):
