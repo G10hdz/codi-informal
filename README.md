@@ -6,6 +6,8 @@ No hay frontend. El dueño escribe o manda una nota de voz, el bot pide el push 
 
 La idea y el corte están en [IDEA.md](IDEA.md). Los campos de la API que sí usamos están en [docs/pey-api.md](docs/pey-api.md).
 
+Los requisitos de seguridad antes de habilitar cobros están en [docs/guardrails.md](docs/guardrails.md).
+
 ## Estado
 
 Esqueleto del bot. Falta la API key de pey y el token de WhatsApp para cobrar de verdad.
