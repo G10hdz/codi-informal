@@ -10,6 +10,30 @@ La idea y el corte están en [IDEA.md](IDEA.md). Los campos de la API que sí us
 
 Esqueleto del bot. Falta la API key de pey y el token de WhatsApp para cobrar de verdad.
 
+## Cómo se le habla
+
+- `cobra 0.01 al 5512345678`
+- `manda el qr del puesto`
+- `qué se ha cobrado`
+
+Una nota de voz usa esas mismas frases. Sin llave para transcribir, el bot pide el texto.
+
+## Cómo correr
+
+```bash
+cp .env.example .env
+PYTHONPATH=. python3 -m unittest discover -s tests
+PYTHONPATH=. python3 -m codi_informal
+```
+
+El proceso escucha en `127.0.0.1:8787`. Para probar sin WhatsApp:
+
+```bash
+curl -s localhost:8787/mensaje \
+  -H 'content-type: application/json' \
+  -d '{"texto":"cobra 0.01 al 5512345678"}'
+```
+
 ## Equipo
 
 - Gio: https://github.com/G10hdz
