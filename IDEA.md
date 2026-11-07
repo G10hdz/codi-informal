@@ -30,6 +30,8 @@ Lo que se puede enseñar antes del domingo a la 1:00 p.m.:
 
 Compras colectivas y la red de puntos se cuentan en el pitch como el siguiente uso de la misma capa. No se construyen las dos completas hoy.
 
+Altagracia no escribe código. Prueba el flujo como lo usaría alguien del puesto o de la tanda, y dice si se entiende. Si ella se atora, el flujo no está listo.
+
 ## Entrega
 
 - Límite: domingo 8 de noviembre de 2026, 1:00 p.m.

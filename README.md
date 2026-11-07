@@ -12,6 +12,8 @@ Esqueleto. Todavía no hay código de cobro.
 
 - Gio: https://github.com/G10hdz
 - Jeaneth: https://github.com/jeanethS
+- Syn: https://github.com/syndeldebby
+- Altagracia: miembro del equipo. Aporta ideas desde su experiencia y prueba los flujos. No escribe código.
 
 ## Documentación de pey
 
