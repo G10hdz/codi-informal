@@ -6,6 +6,8 @@ El dato de escala es el de `00-plataforma.md`: 33.1 millones de personas en la i
 
 ## Tanda
 
+Las reglas de la tanda son concretas: quiénes son integrantes, el monto por integrante, el orden de turnos y el calendario de fechas. Cada integrante tiene su propia cuenta de pey. El sistema cobra a cada quien con un push en su fecha y le recuerda por WhatsApp a quien no ha pagado. Quien tiene el turno recibe directo en su cuenta; nadie junta ni guarda un bote.
+
 REQ-19. WHILE una tanda tiene integrantes, monto y calendario, THE sistema SHALL cobrar a cada quien con el mismo push de REQ-1 y SHALL NOT dejar el dinero en manos de una persona administradora.
 
 Evidencia: tres cobros de prueba quedan en el registro con el id de la tanda. No hay un saldo que alguien pueda retirar fuera de CoDi.
@@ -13,6 +15,26 @@ Evidencia: tres cobros de prueba quedan en el registro con el id de la tanda. No
 REQ-20. WHILE un integrante no paga en la fecha, THE sistema SHALL avisarlo por WhatsApp y SHALL NOT marcar la tanda como completa.
 
 Evidencia: un calendario de prueba con un pago faltante no cambia el estado a completa.
+
+REQ-41. WHILE una tanda se arma, THE tanda SHALL tener integrantes, monto, orden de turnos y calendario, y cada integrante SHALL tener su propia cuenta de pey en `ACTIVE`.
+
+Evidencia: una tanda de prueba con tres integrantes carga el orden y el calendario, y no se arma sin una cuenta activa por integrante.
+
+REQ-42. WHILE llega la fecha de un integrante, THE sistema SHALL cobrarle el monto de la tanda con el mismo push de REQ-1, a su celular.
+
+Evidencia: el calendario de prueba dispara el cobro del integrante en su fecha, con la orden que produce `cobra <monto> al <teléfono>`.
+
+REQ-43. WHILE un integrante no ha pagado, THE sistema SHALL mandarle recordatorios por WhatsApp hasta que pague o el grupo decida otra cosa. El aviso de REQ-20 sigue valiendo.
+
+Evidencia: un integrante de prueba sin pagar recibe el recordatorio del día y del siguiente, y ninguno cobra de más.
+
+REQ-44. WHILE se cobra a un integrante, THE dinero SHALL caer directo en la cuenta del integrante que tiene el turno, con su `bankAccountId`, y SHALL NOT pasar por una cuenta común ni por un administrador.
+
+Evidencia: el push de prueba va a la cuenta de quien tiene el turno y no existe una cuenta que retenga dinero.
+
+REQ-45. WHILE un integrante no paga, THE sistema SHALL NOT cobrarle penas ni intereses y SHALL avisar a la tanda para que el grupo decida qué hacer.
+
+Evidencia: el integrante que no paga no recibe un cargo extra; el aviso lo nombra y deja la decisión al grupo.
 
 ## Compras entre puestos y entre vecinos
 
@@ -24,7 +46,8 @@ REQ-22. WHILE un punto comunitario recibe un mandado, THE aviso de pago SHALL ll
 
 Evidencia: un webhook de ese cobro genera dos textos de aviso y una sola fila en el registro.
 
-## No entra en el hackatón
+## No entra aquí
 
 - NG-11. Construir la tanda, la compra colectiva y la red de puntos antes del domingo 8 de noviembre de 2026, 1:00 p.m.
 - NG-12. Duplicar una app de tandas o un QR genérico que no deje registro.
+- NG-18. Penas, intereses o cargos automáticos para quien no paga. Lo que pasa con un atraso lo decide el grupo.
