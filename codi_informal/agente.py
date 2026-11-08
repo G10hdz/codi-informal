@@ -191,14 +191,14 @@ class Agente:
         return "\n".join(lineas)
 
 
-def atender(entrada: dict, agente: Agente, transcribir=None) -> Resultado | None:
+def atender(entrada: dict, agente: Agente, transcribir=None, *, dueno: str = "local", chat: str = "local") -> Resultado | None:
     tipo = entrada.get("tipo")
     if tipo == "audio":
         if transcribir is None:
             return Resultado(VOZ_SIN_TRANSCRIPCION)
-        return agente.responder(transcribir(entrada.get("audio_id")))
+        return agente.responder(transcribir(entrada.get("audio_id")), dueno=dueno, chat=chat)
     if tipo == "text":
-        return agente.responder(entrada.get("texto") or "")
+        return agente.responder(entrada.get("texto") or "", dueno=dueno, chat=chat)
     return None
 
 

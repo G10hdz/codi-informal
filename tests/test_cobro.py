@@ -7,7 +7,7 @@ import unittest
 import urllib.request
 from decimal import Decimal
 
-from codi_informal.agente import Agente
+from codi_informal.agente import Agente, atender
 from codi_informal.confirmacion import Confirmaciones
 from codi_informal.pey import Pey, PeyError, centavos, tope_centavos
 from codi_informal.registro import abrir, registrar_pago
@@ -59,6 +59,27 @@ class Base(unittest.TestCase):
 
     def op(self):
         return self.conn.execute("select * from operaciones").fetchone()
+
+
+class AtenderTests(Base):
+    def test_atender_pasa_dueno_y_chat_a_la_confirmacion(self):
+        a = self.agente()
+        r = atender({"tipo": "text", "texto": f"cobra 0.01 al {TEL}"}, a, dueno="d1", chat="c1")
+        c = self.codigo(r)
+        # otro dueño o chat no consume la confirmación
+        atender({"tipo": "text", "texto": f"confirmar {c}"}, a, dueno="d2", chat="c1")
+        atender({"tipo": "text", "texto": f"confirmar {c}"}, a, dueno="d1", chat="c2")
+        self.assertEqual(self.llamadas, [])
+        # el dueño y chat correctos sí
+        r2 = atender({"tipo": "text", "texto": f"confirmar {c}"}, a, dueno="d1", chat="c1")
+        self.assertEqual(len(self.llamadas), 1)
+        self.assertIn("123", r2.texto)
+
+    def test_atender_sin_dueno_sigue_en_local(self):
+        a = self.agente()
+        r = atender({"tipo": "text", "texto": f"cobra 0.01 al {TEL}"}, a)
+        atender({"tipo": "text", "texto": f"confirmar {self.codigo(r)}"}, a)
+        self.assertEqual(len(self.llamadas), 1)
 
 
 class DineroTests(unittest.TestCase):
