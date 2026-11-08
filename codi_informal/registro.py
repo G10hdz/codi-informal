@@ -81,6 +81,16 @@ def marcar_operacion(conn, op_id, estado, transaction_id=None, qr_id=None) -> No
         conn.commit()
 
 
+def tiene_incierto(conn, dueno) -> bool:
+    """Hay una operación de ese dueño en estado incierto sin reconciliar."""
+    with _CANDADO:
+        fila = conn.execute(
+            "select 1 from operaciones where dueno=? and estado='incierto' limit 1",
+            (dueno,),
+        ).fetchone()
+    return fila is not None
+
+
 def _conciliar(conn, evento: dict, transaction_id: str) -> None:
     """Push se liga por transactionId, QR por codiQrId. Monto y cuenta tienen que coincidir."""
     if evento.get("type") == "codi.qr.payment_received":

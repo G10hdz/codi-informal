@@ -10,7 +10,7 @@ from decimal import Decimal
 from codi_informal.agente import Agente, atender
 from codi_informal.confirmacion import Confirmaciones
 from codi_informal.pey import Pey, PeyError, centavos, tope_centavos
-from codi_informal.registro import abrir, registrar_pago
+from codi_informal.registro import abrir, crear_operacion, listar, marcar_operacion, registrar_pago
 from codi_informal.server import Config, servir
 from tests.test_esqueleto import SECRETO, firmar
 
@@ -252,6 +252,30 @@ class OperacionTests(Base):
         a = self.agente(conn=None)
         r = a.cobrar(TEL, "0.01", "x", dueno="d1", chat="c1")
         self.assertNotIn("confirmar", r.texto)
+        self.assertEqual(self.llamadas, [])
+
+    def test_no_deja_cobrar_otro_mientras_hay_incierto(self):
+        a = self.agente()
+        self.error = TimeoutError("lento")
+        self.cobrar_y_confirmar(a)
+        self.assertEqual(self.op()["estado"], "incierto")
+        r = a.cobrar(TEL, "0.01", "x", dueno="d1", chat="c1")
+        self.assertNotIn("confirmar", r.texto)
+        self.assertIn("sin resolver", r.texto.lower())
+        self.assertEqual(len(self.llamadas), 1)
+        # otro dueño no está bloqueado
+        r2 = a.cobrar(TEL, "0.01", "x", dueno="d2", chat="c1")
+        self.assertIn("confirmar", r2.texto)
+
+    def test_no_confirma_un_borrador_mientras_hay_incierto(self):
+        a = self.agente()
+        c = self.codigo(a.responder("cobra 0.01 al 5598765432", dueno="d1", chat="c1"))
+        # otro cobro del mismo dueño quedó incierto
+        op = crear_operacion(self.conn, "d1", "c9", "push", 1, "x")
+        marcar_operacion(self.conn, op["op_id"], "incierto")
+        r = a.responder(f"confirmar {c}", dueno="d1", chat="c1")
+        self.assertNotIn("Le mandé", r.texto)
+        self.assertIn("sin resolver", r.texto.lower())
         self.assertEqual(self.llamadas, [])
 
 

@@ -6,7 +6,7 @@ import time
 
 from codi_informal.confirmacion import Confirmaciones
 from codi_informal.pey import PeyError, PeyIncierto, centavos, pesos, telefono_mx, tope_centavos
-from codi_informal.registro import crear_operacion, listar, marcar_operacion
+from codi_informal.registro import crear_operacion, listar, marcar_operacion, tiene_incierto
 
 AYUDA = (
     "Soy el bot de cobros. Escríbeme, por ejemplo: cobra 0.01 al 5512345678. "
@@ -22,6 +22,10 @@ SIN_REGISTRO = "No hay registro donde guardar la operación, así que no cobro."
 INCIERTO = (
     "No sé si el cobro salió: pey no respondió a tiempo. No lo reintento para no cobrar doble. "
     "Revisa con el operador antes de pedirlo otra vez."
+)
+BLOQUEO_INCIERTO = (
+    "Tienes un cobro sin resolver: el anterior quedó en duda y pudo haberse creado. "
+    "Revísalo con el operador antes de pedir otro, para no cobrar doble."
 )
 
 _COBRA = re.compile(
@@ -98,6 +102,8 @@ class Agente:
         return None
 
     def _borrador(self, datos: dict, descripcion: str, dueno, chat) -> Resultado:
+        if self.conn is not None and tiene_incierto(self.conn, dueno):
+            return Resultado(BLOQUEO_INCIERTO)
         codigo = self.confirmaciones.crear(dueno, chat, datos)
         return Resultado(
             f"Voy a {descripcion}. {AVISO_DINERO} "
@@ -111,6 +117,8 @@ class Agente:
         sin_cobro = self._no_se_puede(datos["cents"])  # se revalida al consumir
         if sin_cobro or self.conn is None or self.pey is None:
             return Resultado(sin_cobro or SIN_REGISTRO)
+        if tiene_incierto(self.conn, dueno):
+            return Resultado(BLOQUEO_INCIERTO)
         if datos["tipo"] == "qr":
             return self._ejecutar_qr(datos, dueno, chat)
         return self._ejecutar_push(datos, dueno, chat)
