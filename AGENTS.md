@@ -14,7 +14,7 @@ Cada cambio entra por PR a `main`. Se empuja la rama al terminar el commit. `mai
 
 ## Qué se construye
 
-No hay frontend. La puerta es WhatsApp: texto, nota de voz, foto de ticket y, cuando exista el tap, NFC. El cobro de verdad es CoDi por pey: push o QR. Los campos válidos están en `docs/pey-api.md`. Si un endpoint no está ahí, no se llama.
+No hay frontend en el corte del hackatón. La puerta es WhatsApp: texto, nota de voz, foto de ticket y, cuando exista el tap, NFC. El frontend posterior (página del puesto, libreta y landing) está definido en `specs/06-front.md`. El cobro de verdad es CoDi por pey: push o QR. Los campos válidos están en `docs/pey-api.md`. Si un endpoint no está ahí, no se llama.
 
 El tope de prueba es `PEY_MAX_AMOUNT` (0.01 si nadie lo cambia). Los pagos no se devuelven.
 

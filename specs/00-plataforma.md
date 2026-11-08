@@ -12,7 +12,7 @@ Quien cobra a veces no sabe escribir, o no quiere instalar otra app. Habla, mand
 
 ## Qué es
 
-Una capa de pagos con CoDi. La puerta es un agente en WhatsApp. No hay frontend.
+Una capa de pagos con CoDi. La puerta es un agente en WhatsApp. No hay frontend en el corte del hackatón. Las páginas del puesto, la libreta y la landing quedan definidas en `06-front.md` como alcance posterior al hackatón.
 
 El agente entiende texto, voz y una foto. Contesta en el idioma del mensaje. Con eso arma un push de CoDi, un QR para dejar pegado, o el registro de un pago que ya entró. Un tap NFC, cuando el puesto lo tenga, abre el mismo cobro. No es otro riel.
 
@@ -22,7 +22,7 @@ Está hecho cuando Altagracia completa, en el WhatsApp desplegado, los cinco pas
 
 ## Fuera de este producto
 
-- NG-1. Una página o una app para instalar.
+- NG-1. Una página o una app para instalar dentro del corte del hackatón. Las páginas de `06-front.md` son alcance posterior al hackatón.
 - NG-2. Dar de alta al comercio en el SAT.
 - NG-3. Un score de crédito. El registro es el primer paso, no el crédito.
 - NG-4. Un endpoint de NFC que pey no documenta. El tap usa el mismo push o el mismo QR.

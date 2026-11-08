@@ -36,7 +36,7 @@ Cada puesto con su dueño, su cuenta de pey y sus límites. El alta la hace un o
 
 Specs: `06-front.md` y `03-nfc.md`.
 
-URL pública por puesto y QR al momento. La pegatina NFC de `03-nfc.md` abre esa página. Sin CLABE ni teléfono del dueño.
+URL pública por puesto, que muestra el QR que el dueño armó desde el chat con la confirmación de `G04`. La pegatina NFC de `03-nfc.md` abre esa página. Sin CLABE ni teléfono del dueño.
 
 ## 6. Libreta
 
