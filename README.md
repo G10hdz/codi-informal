@@ -4,7 +4,7 @@ Varísimo es un bot de WhatsApp que cobra con CoDi para quien vende en la inform
 
 No hay frontend. El dueño escribe o manda una nota de voz, el bot pide el push o el QR a pey, y cuando el pago entra se lo avisa en el mismo chat.
 
-La idea y el corte están en [IDEA.md](IDEA.md). Los campos de la API que sí usamos están en [docs/pey-api.md](docs/pey-api.md).
+La idea y el corte están en [IDEA.md](IDEA.md). Los campos de la API que sí usamos están en [docs/pey-api.md](docs/pey-api.md). La página del proyecto está en [site/index.html](site/index.html).
 
 Los requisitos de seguridad antes de habilitar cobros están en [docs/guardrails.md](docs/guardrails.md).
 

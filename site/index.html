@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Varísimo: cobra con CoDi desde WhatsApp</title>
+<meta name="description" content="Varísimo es un bot de WhatsApp que cobra con CoDi para quien vende en el tianguis. Texto, nota de voz o foto del ticket. Proyecto del Hackatón DevDay Exchange, CDMX 2026.">
+<meta name="theme-color" content="#fff7ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1e1a15" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23e8457a'/%3E%3Ctext x='32' y='45' font-family='sans-serif' font-size='38' font-weight='bold' text-anchor='middle' fill='%23fff7ec'%3EV%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#fff7ec;
+  --ink:#1d1a16;
+  --muted:#6b6258;
+  --rosa:#e8457a;
+  --rosa-texto:#b3135b;
+  --verde:#1f8a5b;
+  --amarillo:#ffcf3f;
+  --card:#ffffff;
+  --line:#efe3d3;
+  --line-rosa:#f6c4d4;
+  --sombra:0 18px 44px -22px rgba(90,58,20,.45);
+  --chat-wall:#ece0cf;
+  --chat-top:#0b6e4f;
+  --burbuja-bot:#ffffff;
+  --burbuja-dueno:#d9f2c8;
+  --chat-hora:#6b6258;
+  --check:#1f8a5b;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#1e1a15;
+    --ink:#f5eee0;
+    --muted:#b8ab98;
+    --rosa-texto:#f47fae;
+    --card:#2a241e;
+    --line:#463c30;
+    --line-rosa:#6e3349;
+    --sombra:0 18px 44px -22px rgba(0,0,0,.7);
+    --chat-wall:#131a15;
+    --chat-top:#242e27;
+    --burbuja-bot:#2f2922;
+    --burbuja-dueno:#1f5c43;
+    --chat-hora:#a89a86;
+    --check:#4ec98e;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:Inter,system-ui,sans-serif;
+  font-size:17px;
+  line-height:1.55;
+}
+body::before{
+  content:"";display:block;height:14px;
+  background:repeating-linear-gradient(90deg,var(--rosa) 0 60px,var(--amarillo) 60px 120px,var(--verde) 120px 180px);
+}
+.wrap{width:min(1060px,100% - 40px);margin-inline:auto}
+.skip{
+  position:absolute;left:16px;top:-60px;z-index:10;
+  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;
+  font-weight:600;text-decoration:none;transition:top .2s;
+}
+.skip:focus{top:16px}
+a{color:var(--rosa-texto);text-underline-offset:3px}
+a:hover{text-decoration-thickness:2px}
+:focus{outline:none}
+:focus-visible{outline:3px solid var(--rosa);outline-offset:3px;border-radius:4px}
+h1,h2,.num,.monto,.marca{font-family:'Bricolage Grotesque',Inter,sans-serif}
+
+/* encabezado */
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 0}
+.marca{font-weight:800;font-size:26px;letter-spacing:-.5px;color:var(--ink);text-decoration:none}
+.marca span{color:var(--rosa)}
+nav ul{display:flex;gap:26px;list-style:none}
+nav a{color:var(--ink);text-decoration:none;font-weight:500;font-size:15px}
+nav a:hover{color:var(--rosa-texto);text-decoration:underline;text-underline-offset:4px}
+.repo{
+  display:inline-block;background:var(--ink);color:var(--bg);
+  font-weight:600;font-size:15px;text-decoration:none;
+  padding:9px 18px;border-radius:999px;white-space:nowrap;
+}
+.repo:hover{background:var(--rosa);color:#fff;text-decoration:none}
+@media (prefers-color-scheme: dark){.repo:hover{color:var(--ink);background:var(--amarillo)}}
+@media (max-width:700px){nav ul{display:none}}
+
+/* hero */
+.hero{padding:clamp(36px,7vw,72px) 0 clamp(48px,8vw,80px)}
+.hero-grid{display:grid;gap:44px;align-items:center}
+@media (min-width:920px){.hero-grid{grid-template-columns:1.05fr .95fr}}
+.etiqueta{
+  display:inline-block;background:var(--amarillo);color:#1d1a16;
+  font-weight:600;font-size:14px;padding:6px 16px;border-radius:999px;
+}
+h1{
+  font-size:clamp(58px,13vw,108px);font-weight:800;
+  letter-spacing:-3px;line-height:.95;margin-top:18px;
+}
+h1 span{color:var(--rosa)}
+.lema{font-size:clamp(19px,2.6vw,24px);color:var(--muted);margin-top:16px;max-width:26ch}
+.botones{display:flex;flex-wrap:wrap;gap:14px;margin-top:30px}
+.btn{
+  font-weight:600;font-size:16px;text-decoration:none;
+  padding:13px 26px;border-radius:999px;display:inline-block;
+}
+.btn:active{transform:translateY(1px)}
+.btn-pri{background:var(--amarillo);color:#1d1a16;border:2px solid var(--amarillo)}
+.btn-pri:hover{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn-sec{border:2px solid var(--ink);color:var(--ink)}
+.btn-sec:hover{background:var(--ink);color:var(--bg)}
+
+/* teléfono con el chat */
+.phone{
+  width:min(350px,100%);margin-inline:auto;
+  border:2px solid var(--line);border-radius:34px;overflow:hidden;
+  background:var(--chat-wall);box-shadow:var(--sombra);
+}
+.phone-top{
+  display:flex;align-items:center;gap:10px;
+  background:var(--chat-top);color:#fff;padding:13px 16px;
+}
+.avatar{
+  width:36px;height:36px;border-radius:50%;flex:none;
+  background:var(--amarillo);color:#1d1a16;
+  font-family:'Bricolage Grotesque';font-weight:800;font-size:19px;
+  display:flex;align-items:center;justify-content:center;
+}
+.phone-top b{display:block;font-size:15px;line-height:1.2}
+.phone-top small{font-size:12px;opacity:.85}
+.chat{
+  list-style:none;display:flex;flex-direction:column;gap:8px;
+  padding:16px 12px;
+  background-image:radial-gradient(rgba(29,26,22,.07) 1px,transparent 1.2px);
+  background-size:18px 18px;
+}
+@media (prefers-color-scheme: dark){
+  .chat{background-image:radial-gradient(rgba(245,238,224,.06) 1px,transparent 1.2px)}
+  .msg.dueno .hora{color:#c9e2b4}
+}
+.msg{
+  max-width:84%;padding:8px 12px 6px;border-radius:12px;
+  font-size:14.5px;line-height:1.4;
+  box-shadow:0 1px 1px rgba(0,0,0,.12);
+}
+.msg.bot{align-self:flex-start;background:var(--burbuja-bot);border-top-left-radius:3px}
+.msg.dueno{align-self:flex-end;background:var(--burbuja-dueno);border-top-right-radius:3px}
+.msg .hora{display:block;text-align:right;font-size:11px;color:var(--chat-hora);margin-top:3px}
+.phone-input{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 14px 14px;
+}
+.phone-input span{
+  flex:1;background:var(--burbuja-bot);color:var(--chat-hora);
+  border-radius:999px;padding:9px 16px;font-size:14px;
+}
+.phone-input i{
+  width:38px;height:38px;border-radius:50%;flex:none;
+  background:var(--chat-top);display:block;
+}
+.figura{text-align:center;color:var(--muted);font-size:14px;margin-top:14px}
+
+/* banda del primer cobro */
+.hito{
+  background:var(--ink);color:#fdf6ea;border-radius:26px;
+  padding:30px 34px;display:flex;align-items:center;gap:28px;
+}
+@media (max-width:560px){
+  .hito{flex-direction:column;align-items:flex-start;gap:10px}
+}
+.monto{font-size:clamp(54px,10vw,88px);font-weight:800;color:var(--amarillo);line-height:1;flex:none}
+.hito p{font-size:clamp(16px,2.4vw,20px);line-height:1.4}
+.hito b{color:var(--amarillo)}
+@media (prefers-color-scheme: dark){.hito{background:var(--card)}}
+
+/* secciones */
+section{padding:clamp(44px,7vw,72px) 0}
+h2{font-size:clamp(32px,5.4vw,46px);font-weight:700;letter-spacing:-1px;margin-bottom:10px}
+.intro{color:var(--muted);max-width:52ch;margin-bottom:30px;font-size:18px}
+
+/* cómo funciona */
+.pasos{display:grid;gap:14px;grid-template-columns:1fr;list-style:none}
+@media (min-width:560px){.pasos{grid-template-columns:1fr 1fr}}
+@media (min-width:1000px){.pasos{grid-template-columns:repeat(4,1fr)}}
+.paso{
+  background:var(--card);border:2px solid var(--line);
+  border-radius:20px;padding:22px 20px;
+}
+.num{
+  width:44px;height:44px;border-radius:50%;background:var(--verde);color:#fff;
+  font-weight:800;font-size:24px;display:flex;align-items:center;justify-content:center;
+  margin-bottom:14px;
+}
+.paso p{font-size:16.5px;line-height:1.45}
+.paso q{quotes:"«" "»"}
+
+/* por qué */
+.porque-grid{display:grid;gap:30px}
+@media (min-width:900px){.porque-grid{grid-template-columns:5fr 7fr;gap:50px;align-items:start}}
+.razones{list-style:none;display:grid;gap:4px}
+.razones li{
+  display:flex;gap:14px;align-items:baseline;
+  font-size:17.5px;line-height:1.5;padding:11px 0;
+}
+.razones li + li{border-top:2px dashed var(--line)}
+.razones li::before{
+  content:"✓";flex:none;color:var(--check);font-weight:800;font-size:19px;
+}
+
+/* lo que sigue */
+.sigue{
+  background:var(--card);border:2px dashed var(--line-rosa);
+  border-radius:22px;padding:26px 28px;
+}
+.sigue ul{list-style:none;display:grid;gap:12px;margin-top:18px}
+@media (min-width:720px){.sigue ul{grid-template-columns:1fr 1fr;gap:16px 34px}}
+.sigue li{display:flex;gap:12px;align-items:baseline;font-size:16.5px;line-height:1.45}
+.sigue li::before{content:"○";flex:none;color:var(--rosa);font-weight:800;font-size:15px}
+.aviso-sigue{
+  display:inline-block;border:2px solid var(--line-rosa);color:var(--rosa-texto);
+  font-weight:600;font-size:13.5px;padding:4px 14px;border-radius:999px;
+}
+
+/* pie */
+footer{border-top:2px dashed var(--line);padding:40px 0 48px;color:var(--muted);font-size:15.5px}
+footer .equipo{color:var(--ink);font-size:17px;margin-bottom:6px}
+footer p{margin-top:6px}
+footer a{color:var(--rosa-texto);font-weight:600}
+
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  .btn:active{transform:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+
+<header class="wrap top">
+  <a class="marca" href="#contenido" aria-label="Varísimo, inicio">Varí<span aria-hidden="true">simo</span></a>
+  <nav aria-label="Secciones">
+    <ul>
+      <li><a href="#como-funciona">Cómo funciona</a></li>
+      <li><a href="#por-que">Por qué</a></li>
+      <li><a href="#lo-que-sigue">Lo que sigue</a></li>
+    </ul>
+  </nav>
+  <a class="repo" href="https://github.com/G10hdz/codi-informal">Ver el código</a>
+</header>
+
+<main id="contenido">
+  <section class="hero wrap" aria-labelledby="titulo">
+    <div class="hero-grid">
+      <div>
+        <span class="etiqueta">Hackatón DevDay Exchange, CDMX 2026</span>
+        <h1 id="titulo" aria-label="Varísimo">Varí<span aria-hidden="true">simo</span></h1>
+        <p class="lema">Cobra con CoDi desde WhatsApp: con texto, voz o foto del ticket.</p>
+        <div class="botones">
+          <a class="btn btn-pri" href="https://github.com/G10hdz/codi-informal">Ver el código</a>
+          <a class="btn btn-sec" href="#como-funciona">Cómo funciona</a>
+        </div>
+      </div>
+
+      <figure>
+        <div class="phone" role="img" aria-label="Conversación de ejemplo: la dueña escribe cobra 0.01 al 55 1234 5678, el bot pide confirmar con el código 8D8238, la dueña confirma, el bot avisa que mandó el cobro y después que entró el pago de 0.01">
+          <div class="phone-top" aria-hidden="true">
+            <span class="avatar">V</span>
+            <div><b>Varísimo</b><small>en línea</small></div>
+          </div>
+          <ul class="chat" aria-hidden="true">
+            <li class="msg dueno">cobra 0.01 al 55 1234 5678<span class="hora">10:41</span></li>
+            <li class="msg bot">Voy a cobrar $0.01 MXN al 55 1234 5678. Para seguir responde: <b>confirmar 8D8238</b>. Vence en 2 minutos.<span class="hora">10:41</span></li>
+            <li class="msg dueno">confirmar 8D8238<span class="hora">10:42</span></li>
+            <li class="msg bot">Le mandé el cobro de $0.01 al 55 1234 5678. Le llega una notificación de su banco. Aviso cuando entre el pago.<span class="hora">10:42</span></li>
+            <li class="msg bot"><b>Entró un pago de $0.01.</b> Ya quedó en el registro.<span class="hora">10:43</span></li>
+          </ul>
+          <div class="phone-input" aria-hidden="true">
+            <span>Mensaje</span><i></i>
+          </div>
+        </div>
+        <figcaption class="figura">Un cobro de prueba, tal como se ve en WhatsApp.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="wrap" aria-label="Primer cobro real">
+    <div class="hito">
+      <div class="monto">$0.01</div>
+      <p><b>Ya cobramos de verdad.</b><br>Primer cobro real por WhatsApp con CoDi. Se pagó desde la app del banco y el bot avisó solo que entró el dinero.</p>
+    </div>
+  </section>
+
+  <section class="wrap" id="como-funciona" aria-labelledby="h-como">
+    <h2 id="h-como">Cómo funciona</h2>
+    <p class="intro">Todo pasa en el chat. No hay pantallas nuevas que aprender.</p>
+    <ol class="pasos">
+      <li class="paso"><span class="num" aria-hidden="true">1</span><p>Le pides el cobro al bot: <q>cobra 0.01 al 55 1234 5678</q>. También entiende notas de voz y fotos del ticket.</p></li>
+      <li class="paso"><span class="num" aria-hidden="true">2</span><p>Te manda un código para confirmar. Nada se cobra sin tu sí.</p></li>
+      <li class="paso"><span class="num" aria-hidden="true">3</span><p>A quien paga le llega el cobro en la app de su banco, como cualquier CoDi.</p></li>
+      <li class="paso"><span class="num" aria-hidden="true">4</span><p>Paga, y el bot te avisa en el mismo chat: <q>Entró un pago</q>.</p></li>
+    </ol>
+  </section>
+
+  <section class="wrap" id="por-que" aria-labelledby="h-porque">
+    <div class="porque-grid">
+      <div>
+        <h2 id="h-porque">Por qué</h2>
+        <p class="intro">Hecho para el puesto, no para la oficina.</p>
+      </div>
+      <ul class="razones">
+        <li>No hay app que instalar: todo pasa en el WhatsApp que ya tienes.</li>
+        <li>No hay terminal ni tarjeta: el cobro es un mensaje.</li>
+        <li>CoDi no cobra comisión.</li>
+        <li>El dinero va de cuenta a cuenta. Nadie lo guarda en el camino.</li>
+        <li>Cada cobro pide tu confirmación antes de salir.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="wrap" id="lo-que-sigue" aria-labelledby="h-sigue">
+    <h2 id="h-sigue">Lo que sigue</h2>
+    <p class="intro">Sobre la misma capa de CoDi. <span class="aviso-sigue">Todavía no está construido</span></p>
+    <div class="sigue">
+      <ul>
+        <li>Una página para cada puesto, con su sticker NFC: quien compra acerca el celular y paga.</li>
+        <li>El libro de cuentas del puesto: qué entró, cuándo y de quién.</li>
+        <li>Tandas donde el dinero se mueve por CoDi y nadie se queda con la olla.</li>
+        <li>Un agente de voz en vivo, para cobrar sin escribir.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p class="equipo">Hecho por Gio, Jeaneth, Syn y Altagracia.</p>
+  <p>Proyecto del Hackatón DevDay Exchange, Ciudad de México, 2026.</p>
+  <p>El código está en <a href="https://github.com/G10hdz/codi-informal">github.com/G10hdz/codi-informal</a>.</p>
+</footer>
+</body>
+</html>
