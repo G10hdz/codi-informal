@@ -6,17 +6,19 @@ import os
 import tempfile
 import threading
 import unittest
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from decimal import Decimal
 from math import floor
+from unittest import mock
 
 from codi_informal.agente import VOZ_SIN_TRANSCRIPCION, Agente, atender
 from codi_informal.firma import FirmaInvalida, verificar
 from codi_informal.pey import Pey, PeyError
 from codi_informal.registro import abrir, crear_operacion, listar, marcar_operacion, registrar_pago
 from codi_informal.server import Config, servir
-from codi_informal.whatsapp import cuerpo_texto, extraer, multipart_imagen
+from codi_informal.whatsapp import cuerpo_texto, descargar_media, extraer, multipart_imagen
 
 
 SECRETO = "whsec_" + base64.b64encode(b"secreto-de-prueba-pey").decode()
@@ -160,6 +162,111 @@ class WhatsAppTests(unittest.TestCase):
         self.assertIn(b"whatsapp", png)
         self.assertIn(b"\x89PNG", png)
         self.assertIn("multipart/form-data", content_type)
+
+
+class _Media:
+    def __init__(self, datos=b"", headers=None):
+        self._d = datos
+        self.headers = headers or {}
+        self.lecturas = 0
+
+    def read(self, n=-1):
+        self.lecturas += 1
+        return self._d if n is None or n < 0 else self._d[:n]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def close(self):
+        pass
+
+
+class DescargaMediaTests(unittest.TestCase):
+    def _bajar(self, falso, max_bytes=10, media_id="mid1", token="tok"):
+        with mock.patch("codi_informal.whatsapp._abrir", falso):
+            return descargar_media(media_id, token, max_bytes=max_bytes, timeout=7)
+
+    def test_pide_la_url_a_graph_y_baja_el_archivo_con_el_mismo_token(self):
+        vistos = []
+
+        def falso(req, timeout=0):
+            vistos.append((req, timeout))
+            if req.full_url == "https://graph.facebook.com/v21.0/mid1":
+                return _Media(b'{"url": "https://lookaside.fbsbx.com/a?b=1"}')
+            return _Media(b"BYTES-OGG")
+
+        self.assertEqual(self._bajar(falso), b"BYTES-OGG")
+        self.assertEqual(vistos[0][0].full_url, "https://graph.facebook.com/v21.0/mid1")
+        self.assertEqual(vistos[1][0].full_url, "https://lookaside.fbsbx.com/a?b=1")
+        for req, timeout in vistos:
+            self.assertEqual(req.headers["Authorization"], "Bearer tok")
+            self.assertEqual(timeout, 7)
+
+    def test_content_length_mayor_al_tope_no_baja_el_cuerpo(self):
+        medias = []
+
+        def falso(req, timeout=0):
+            if req.full_url.endswith("/mid1"):
+                return _Media(b'{"url": "https://lookaside.fbsbx.com/a"}')
+            resp = _Media(b"x" * 11, headers={"Content-Length": "11"})
+            medias.append(resp)
+            return resp
+
+        self.assertIsNone(self._bajar(falso, max_bytes=10))
+        self.assertEqual(medias[0].lecturas, 0)
+
+    def test_cuerpo_que_pasa_el_tope_se_corta_y_rechaza(self):
+        def falso(req, timeout=0):
+            if req.full_url.endswith("/mid1"):
+                return _Media(b'{"url": "https://lookaside.fbsbx.com/a"}')
+            return _Media(b"x" * 100)
+
+        self.assertIsNone(self._bajar(falso, max_bytes=10))
+
+    def test_url_que_no_es_de_meta_no_se_baja(self):
+        llamadas = []
+
+        def falso(req, timeout=0):
+            llamadas.append(req.full_url)
+            if req.full_url.endswith("/mid1"):
+                return _Media(b'{"url": "https://evil.test/steal"}')
+            return _Media(b"x")
+
+        self.assertIsNone(self._bajar(falso))
+        self.assertEqual(llamadas, ["https://graph.facebook.com/v21.0/mid1"])
+
+    def test_solo_https_y_hosts_de_meta(self):
+        for url in ("http://lookaside.fbsbx.com/a", "https://localhost:8787/x",
+                    "ftp://fbsbx.com/a", "no es url", "https://fbsbx.com.evil.test/a"):
+            def falso(req, timeout=0, u=url):
+                if req.full_url.endswith("/mid1"):
+                    return _Media(json.dumps({"url": u}).encode())
+                return _Media(b"x")
+
+            self.assertIsNone(self._bajar(falso), url)
+
+    def test_fallos_devuelven_none(self):
+        casos = [
+            lambda req, timeout=0: (_ for _ in ()).throw(urllib.error.URLError("caido")),
+            lambda req, timeout=0: (_ for _ in ()).throw(
+                urllib.error.HTTPError("u", 302, "redirect", {}, None)),
+            lambda req, timeout=0: _Media(b"no json"),
+            lambda req, timeout=0: _Media(b"{}"),
+            lambda req, timeout=0: _Media(b'{"url": 42}'),
+        ]
+        for falso in casos:
+            self.assertIsNone(self._bajar(falso))
+
+    def test_id_raro_o_sin_token_no_llama(self):
+        def falso(req, timeout=0):
+            raise AssertionError("no debe llamar")
+
+        self.assertIsNone(self._bajar(falso, media_id="a/b/../x"))
+        self.assertIsNone(self._bajar(falso, media_id="http://evil.test"))
+        self.assertIsNone(self._bajar(falso, token=""))
 
 
 class BotTests(unittest.TestCase):
