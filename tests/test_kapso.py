@@ -226,6 +226,25 @@ class WebhookKapsoTests(KapsoBase):
             self.post_kapso(evento("cobra 0.01 al 5512345678", de="5215599999999")), 403)
         self.assertEqual(self.pey.pushes, 0)
 
+    def test_evento_de_otro_numero_se_ignora(self):
+        self.levantar_kapso()
+        # firmado pero dirigido a otro negocio del proyecto: no arma borrador ni cobro
+        casos = []
+        for phone_id in ("otro-negocio", None):
+            datos = json.loads(evento("cobra 0.01 al 5512345678",
+                                      mid=f"o-{phone_id}", phone_id=phone_id))
+            if phone_id is None:
+                datos.pop("phone_number_id")
+            casos.append(datos)
+        with mock.patch("urllib.request.urlopen",
+                        lambda req, timeout=0: _Respuesta(b'{"id": "m1"}')):
+            for datos in casos:
+                with _codigo_fijo():
+                    self.assertEqual(self.post_kapso(json.dumps(datos).encode()), 200)
+                self.assertEqual(self.post_kapso(
+                    evento(f"confirmar {CODIGO}", mid=f"{datos['message']['id']}-ok")), 200)
+        self.assertEqual(self.pey.pushes, 0)
+
     def test_521_del_dueno_llega_al_agente(self):
         # el owner se guarda como 5500000001; Kapso puede mandar 5215500000001
         self.levantar_kapso()
