@@ -8,6 +8,8 @@ La idea y el corte están en [IDEA.md](IDEA.md). Los campos de la API que sí us
 
 Los requisitos de seguridad antes de habilitar cobros están en [docs/guardrails.md](docs/guardrails.md).
 
+Diagramas de la arquitectura, de un cobro y de los estados de una operación, más un explicador interactivo: [docs/diagramas](docs/diagramas/README.md).
+
 ## Estado
 
 Desplegado en un VPS; cómo está montado y cómo se sube una versión nueva está en [docs/deploy.md](docs/deploy.md).
