@@ -5,7 +5,7 @@ import hmac
 import json
 import re
 import urllib.request
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 _GRAPH = "https://graph.facebook.com/v21.0"
 KAPSO_API = "https://api.kapso.ai/meta/whatsapp/v24.0"
@@ -33,7 +33,7 @@ def firma_kapso_valida(secreto: str, cuerpo: bytes, firma: str) -> bool:
 
 
 def descargar_media(media_id, credencial, *, max_bytes, timeout,
-                    api=None, auth=None, hosts=None):
+                    api=None, auth=None, hosts=None, phone_number_id=None):
     """Bytes del medio o None. Primero pide la url firmada a la API del proveedor y
     luego baja el archivo, sin pasar de max_bytes. Solo ids de medio del proveedor (G07)."""
     if (not credencial or not isinstance(media_id, str) or not _MEDIA_ID.fullmatch(media_id)
@@ -42,8 +42,12 @@ def descargar_media(media_id, credencial, *, max_bytes, timeout,
     api = api or _GRAPH
     auth = auth if auth is not None else {"Authorization": f"Bearer {credencial}"}
     hosts = hosts or _HOSTS_META
+    consulta = f"{api}/{media_id}"
+    # Kapso exige phone_number_id en la consulta de la url del medio
+    if phone_number_id:
+        consulta += "?" + urlencode({"phone_number_id": phone_number_id})
     try:
-        req = urllib.request.Request(f"{api}/{media_id}", headers=auth)
+        req = urllib.request.Request(consulta, headers=auth)
         with _abrir(req, timeout) as r:
             meta = json.loads(r.read(65537) or b"{}")
         # Kapso devuelve download_url (autenticada, en su host); Meta solo url (CDN)

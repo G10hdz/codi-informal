@@ -71,6 +71,11 @@ def evento_imagen(mid, imagen_id="imgk1", de=DUENO, phone_id=PHONE_ID):
     }).encode()
 
 
+def consulta_media(media_id):
+    """GET documentado de get-media-url: phone_number_id es query obligatorio."""
+    return f"{API_MEDIA}/{media_id}?phone_number_id={PHONE_ID}"
+
+
 def meta_media(media_id, descarga=DESCARGA, url=None):
     """Respuesta documentada de get-media-url: url es el CDN de Meta y
     download_url el enlace autenticado de Kapso."""
@@ -164,7 +169,7 @@ class DescargaKapsoTests(unittest.TestCase):
     def _bajar(self, falso, media_id="audk1"):
         with mock.patch("codi_informal.whatsapp._abrir", falso):
             return descargar_media(media_id, API_KEY, max_bytes=10, timeout=7,
-                                   api=API_MEDIA,
+                                   api=API_MEDIA, phone_number_id=PHONE_ID,
                                    auth={"X-API-Key": API_KEY}, hosts=("kapso.ai",))
 
     def test_pide_la_url_al_proxy_y_baja_con_x_api_key(self):
@@ -172,13 +177,13 @@ class DescargaKapsoTests(unittest.TestCase):
 
         def falso(req, timeout=0):
             vistos.append(req)
-            if req.full_url == f"{API_MEDIA}/audk1":
+            if req.full_url == consulta_media("audk1"):
                 return meta_media("audk1")
             return _Media(b"BYTES-OGG")
 
         self.assertEqual(self._bajar(falso), b"BYTES-OGG")
         self.assertEqual([r.full_url for r in vistos], [
-            f"{API_MEDIA}/audk1",
+            consulta_media("audk1"),
             DESCARGA,
         ])
         for req in vistos:
@@ -195,12 +200,12 @@ class DescargaKapsoTests(unittest.TestCase):
 
             def falso(req, timeout=0, m=meta):
                 llamadas.append(req.full_url)
-                if req.full_url == f"{API_MEDIA}/audk1":
+                if req.full_url == consulta_media("audk1"):
                     return m
                 return _Media(b"x")
 
             self.assertIsNone(self._bajar(falso), meta._d)
-            self.assertEqual(llamadas, [f"{API_MEDIA}/audk1"])
+            self.assertEqual(llamadas, [consulta_media("audk1")])
 
 
 class KapsoBase(Base):
@@ -361,7 +366,7 @@ class VozKapsoTests(KapsoBase):
 
     def _media(self, req, timeout=0):
         self.bajadas.append(req)
-        if req.full_url == f"{API_MEDIA}/audk1":
+        if req.full_url == consulta_media("audk1"):
             return meta_media("audk1")
         return _Media(self.OGG)
 
@@ -388,7 +393,7 @@ class VozKapsoTests(KapsoBase):
                 self.assertEqual(
                     self.post_kapso(evento(f"confirmar {CODIGO}", mid="v2")), 200)
             self.assertEqual([r.full_url for r in self.bajadas], [
-                f"{API_MEDIA}/audk1",
+                consulta_media("audk1"),
                 DESCARGA,
             ])
             for req in self.bajadas:
@@ -404,14 +409,14 @@ class VozKapsoTests(KapsoBase):
 
             def media_rara(req, timeout=0):
                 bajadas.append(req.full_url)
-                if req.full_url == f"{API_MEDIA}/audk1":
+                if req.full_url == consulta_media("audk1"):
                     return meta_media("audk1", descarga="https://evil.test/aud")
                 return _Media(self.OGG)
 
             with mock.patch("urllib.request.urlopen", self._red(enviados, transcript=None)), \
                     mock.patch("codi_informal.whatsapp._abrir", media_rara):
                 self.assertEqual(self.post_kapso(evento_audio("v3")), 200)
-            self.assertEqual(bajadas, [f"{API_MEDIA}/audk1"])
+            self.assertEqual(bajadas, [consulta_media("audk1")])
             self.assertIn("nota de voz", textos(enviados)[0])
             self.assertEqual(self.pey.pushes, 0)
 
@@ -421,7 +426,7 @@ class TicketKapsoTests(KapsoBase):
 
     def test_foto_de_ticket_baja_por_kapso_y_se_lee(self):
         def media(req, timeout=0):
-            if req.full_url == f"{API_MEDIA}/imgk1":
+            if req.full_url == consulta_media("imgk1"):
                 return meta_media("imgk1")
             return _Media(self.JPEG)
 

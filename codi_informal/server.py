@@ -75,7 +75,8 @@ def _descargador(config: Config):
     if config.whatsapp_provider == "kapso":
         return lambda media_id, **kw: descargar_media(
             media_id, config.kapso_api_key, api=KAPSO_API,
-            auth={"X-API-Key": config.kapso_api_key}, hosts=HOSTS_KAPSO, **kw)
+            auth={"X-API-Key": config.kapso_api_key}, hosts=HOSTS_KAPSO,
+            phone_number_id=config.kapso_phone_number_id, **kw)
     return lambda media_id, **kw: descargar_media(media_id, config.whatsapp_token, **kw)
 
 
