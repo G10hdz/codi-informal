@@ -118,6 +118,35 @@ class VozTests(unittest.TestCase):
                                           duracion=lambda r: 30))
 
 
+class DuracionTests(unittest.TestCase):
+    def _escribe(self, datos):
+        f = tempfile.NamedTemporaryFile(delete=False, suffix=".ogg")
+        self.addCleanup(lambda: os.path.exists(f.name) and os.remove(f.name))
+        f.write(datos)
+        f.close()
+        return f.name
+
+    def _pagina(self, granule):
+        return b"OggS\x00\x02" + granule.to_bytes(8, "little") + b"\x00" * 13 + b"\x03xx"
+
+    def test_granule_de_la_ultima_pagina_a_48k(self):
+        ruta = self._escribe(self._pagina(48000) + b"ruidoxx" + self._pagina(96000))
+        self.assertEqual(voz.duracion(ruta), 2.0)
+
+    def test_medio_segundo(self):
+        self.assertEqual(voz.duracion(self._escribe(self._pagina(24000))), 0.5)
+
+    def test_no_ogg_incompleto_o_inexistente_es_none(self):
+        self.assertIsNone(voz.duracion(self._escribe(b"mp3 basura")))
+        self.assertIsNone(voz.duracion(self._escribe(b"OggS\x00\x02" + b"\x00" * 4)))
+        self.assertIsNone(voz.duracion(self._escribe(b"")))
+        self.assertIsNone(voz.duracion("/no/existe/audio.ogg"))
+
+    def test_oggs_falso_dentro_del_payload_no_estorba(self):
+        datos = self._pagina(48000) + b"OggS\x99" + b"\x00" * 20
+        self.assertEqual(voz.duracion(self._escribe(datos)), 1.0)
+
+
 class IdiomaTests(unittest.TestCase):
     def test_detecta_es_y_en(self):
         self.assertEqual(idioma.detectar("cobra 0.01 al 5512345678 por favor"), "es")

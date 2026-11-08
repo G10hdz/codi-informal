@@ -38,3 +38,22 @@ def transcribir(audio_id, *, descargar, transcriptor, duracion=None):
             os.remove(ruta)
     texto = " ".join(texto.split()) if isinstance(texto, str) else ""
     return texto or None
+
+
+def duracion(ruta):
+    """Segundos de un ogg/opus o None si no se puede leer. El granule position de la
+    última página OggS (8 bytes little-endian en el offset 6 del encabezado) va a 48 kHz."""
+    try:
+        with open(ruta, "rb") as f:
+            datos = f.read()
+        fin = len(datos)
+        while True:
+            idx = datos.rfind(b"OggS", 0, fin)
+            if idx < 0:
+                return None
+            if idx + 14 <= len(datos) and datos[idx + 4] == 0:
+                break
+            fin = idx
+        return int.from_bytes(datos[idx + 6:idx + 14], "little") / 48000
+    except Exception:
+        return None
