@@ -38,11 +38,11 @@ class VozTests(unittest.TestCase):
         self.assertIsNone(voz.transcribir("abc", descargar=descargar, transcriptor=None))
 
     def test_rechaza_urls_y_ids_raros(self):
-        def descargar(*a, **k):
-            raise AssertionError("no debe descargar")
-
+        descargar = mock.Mock(return_value=b"x")
         for malo in ("http://evil.test/a.ogg", "../etc/passwd", "a/b", "", "x" * 300):
-            self.assertIsNone(voz.transcribir(malo, descargar=descargar, transcriptor=lambda r: "hola"))
+            self.assertIsNone(voz.transcribir(malo, descargar=descargar, transcriptor=lambda r: "hola",
+                                              duracion=lambda r: 30))
+        descargar.assert_not_called()
 
     def test_rechaza_mas_de_5mb(self):
         t = mock.Mock(return_value="hola")
