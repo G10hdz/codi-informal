@@ -184,11 +184,11 @@ class DescargaKapsoTests(unittest.TestCase):
 class KapsoBase(Base):
     def levantar_kapso(self, **ajustes):
         return self.levantar(
-            whatsapp_provider="kapso",
-            kapso_api_key=API_KEY,
-            kapso_phone_number_id=PHONE_ID,
-            kapso_webhook_secret=WEBHOOK_SECRETO,
-            **ajustes)
+            **{"whatsapp_provider": "kapso",
+               "kapso_api_key": API_KEY,
+               "kapso_phone_number_id": PHONE_ID,
+               "kapso_webhook_secret": WEBHOOK_SECRETO,
+               **ajustes})
 
     def post_kapso(self, cuerpo, firmado=True, evento_tipo="whatsapp.message.received",
                    headers=None):
@@ -261,15 +261,18 @@ class WebhookKapsoTests(KapsoBase):
 
     def test_reintento_con_el_mismo_id_no_duplica(self):
         self.levantar_kapso()
-        with _codigo_fijo():
+        with mock.patch("urllib.request.urlopen",
+                        lambda req, timeout=0: _Respuesta(b'{"id": "m1"}')):
+            with _codigo_fijo():
+                self.assertEqual(
+                    self.post_kapso(evento("cobra 0.01 al 5512345678", mid="d1")), 200)
             self.assertEqual(
-                self.post_kapso(evento("cobra 0.01 al 5512345678", mid="d1")), 200)
-        self.assertEqual(self.post_kapso(evento(f"confirmar {CODIGO}", mid="d1-ok")), 200)
-        # Kapso reintenta si no ve 200: la reentrega del mismo id no arma otro cobro
-        with _codigo_fijo():
-            self.assertEqual(
-                self.post_kapso(evento("cobra 0.01 al 5512345678", mid="d1")), 200)
-        self.post_kapso(evento(f"confirmar {CODIGO}", mid="d1-ok"))
+                self.post_kapso(evento(f"confirmar {CODIGO}", mid="d1-ok")), 200)
+            # Kapso reintenta si no ve 200: la reentrega del mismo id no arma otro cobro
+            with _codigo_fijo():
+                self.assertEqual(
+                    self.post_kapso(evento("cobra 0.01 al 5512345678", mid="d1")), 200)
+            self.post_kapso(evento(f"confirmar {CODIGO}", mid="d1-ok"))
         self.assertEqual(self.pey.pushes, 1)
 
     def test_otro_evento_se_ignora(self):
@@ -283,7 +286,8 @@ class WebhookKapsoTests(KapsoBase):
         self.levantar_kapso()
         datos = json.loads(evento("cobra 0.01 al 5512345678"))
         datos["message"]["kapso"]["direction"] = "outbound"
-        self.assertEqual(self.post_kapso(json.dumps(datos).encode()), 200)
+        # sin remitente cae en el mismo rechazo de la ruta de Meta: nada llega al agente
+        self.assertEqual(self.post_kapso(json.dumps(datos).encode()), 403)
         self.assertEqual(self.pey.pushes, 0)
 
     def test_qr_sube_la_imagen_por_kapso(self):
