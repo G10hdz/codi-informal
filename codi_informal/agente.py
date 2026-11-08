@@ -28,6 +28,10 @@ BLOQUEO_INCIERTO = (
     "Tienes un cobro sin resolver: el anterior quedó en duda y pudo haberse creado. "
     "Revísalo con el operador antes de pedir otro, para no cobrar doble."
 )
+PAUSADOS = (
+    "Los cobros están en pausa por ahora. "
+    "Los pagos que ya iban en camino se siguen registrando."
+)
 
 _COBRA = re.compile(
     r"cobra(?:r|me)?\s+\$?\s*(-?[\d.,]+)\s*(?:pesos?)?\s*(?:a|al)\s*([+\d][\d\s-]{8,22})",
@@ -49,10 +53,12 @@ class Resultado:
 
 
 class Agente:
-    def __init__(self, pey, conn, *, max_amount="0.01", reloj=time.monotonic):
+    def __init__(self, pey, conn, *, max_amount="0.01", reloj=time.monotonic,
+                 cobros_activos=True):
         self.pey = pey
         self.conn = conn
         self.max_cents = tope_centavos(max_amount)  # None: cobros deshabilitados
+        self.cobros_activos = cobros_activos
         self.confirmaciones = Confirmaciones(reloj)
 
     def responder(self, texto: str, dueno: str = "local", chat: str = "local") -> Resultado:
@@ -73,6 +79,8 @@ class Agente:
 
     def cobrar(self, telefono, monto, concepto=CONCEPTO, *, dueno="local", chat="local") -> Resultado:
         """Punto único de entrada del cobro push: valida y deja un borrador por confirmar."""
+        if not self.cobros_activos:
+            return Resultado(PAUSADOS)
         try:
             cents = centavos(monto)
         except ValueError:
@@ -113,6 +121,8 @@ class Agente:
         )
 
     def _confirmar(self, codigo: str, dueno, chat) -> Resultado:
+        if not self.cobros_activos:
+            return Resultado(PAUSADOS)
         datos = self.confirmaciones.consumir(dueno, chat, codigo)
         if datos is None:
             return Resultado("No hay un cobro por confirmar con ese código, o ya venció. Pídelo de nuevo.")
@@ -160,6 +170,8 @@ class Agente:
         return Resultado(texto)
 
     def _qr(self, dueno, chat) -> Resultado:
+        if not self.cobros_activos:
+            return Resultado(PAUSADOS)
         if self.pey is None:
             return Resultado(
                 f"Entendí: QR del puesto por ${pesos(self.max_cents or 0)}. "

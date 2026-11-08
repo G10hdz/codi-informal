@@ -43,6 +43,8 @@ PYTHONPATH=. python3 -m codi_informal.registro                          # lista 
 PYTHONPATH=. python3 -m codi_informal.registro resolver <op_id> fallida  # o creada, si sí salió
 ```
 
+`COBROS_ACTIVOS=0` pausa los cobros nuevos; los pagos en camino se siguen conciliando.
+
 ## Equipo
 
 - Gio: https://github.com/G10hdz

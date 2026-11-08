@@ -13,8 +13,9 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 from unittest import mock
 
-from codi_informal.registro import abrir
+from codi_informal.registro import abrir, crear_operacion, marcar_operacion
 from codi_informal.server import Config, handler
+from tests.test_esqueleto import SECRETO, firmar
 
 APP = "secreto-meta-prueba"
 DUENO = "5215500000001"
@@ -327,6 +328,53 @@ class Salida(Base):
         textos = [json.loads(r.data)["text"]["body"] for r in vistos
                   if r.full_url.endswith("/messages") and json.loads(r.data).get("type") == "text"]
         self.assertIn("QRSTRING-PRUEBA", textos[-1])
+
+    def test_pausado_contesta_y_no_llama_a_pey(self):
+        self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123",
+                      cobros_activos=False)
+        vistos = []
+
+        def falso(req, timeout=0):
+            vistos.append(req)
+            return _Respuesta(b'{"id": "m1"}')
+
+        with mock.patch("urllib.request.urlopen", falso):
+            with _codigo_fijo():
+                self.assertEqual(
+                    self.post(evento("cobra 0.01 al 5512345678", mid="p1", para="123")), 200)
+            self.assertEqual(
+                self.post(evento(f"confirmar {CODIGO}", mid="p2", para="123")), 200)
+            self.assertEqual(self.post(evento("manda el qr", mid="p3", para="123")), 200)
+        self.assertEqual(self.pey.pushes, 0)
+        self.assertEqual(self.pey.qrs, 0)
+        textos = [json.loads(r.data)["text"]["body"] for r in vistos
+                  if r.full_url.endswith("/messages")]
+        self.assertEqual(len(textos), 3)
+        self.assertTrue(all("pausa" in t for t in textos), textos)
+
+    def test_pausado_sigue_registrando_pagos(self):
+        config = self.levantar(cobros_activos=False, pey_webhook_secret=SECRETO)
+        conn = abrir(config.registro_path)
+        op = crear_operacion(conn, "d", "c", "push", 1, "Taco")
+        marcar_operacion(conn, op["op_id"], "creada", transaction_id="tx-pausa")
+        crudo = json.dumps({"type": "codi.pn.payment_received", "amount": 0.01,
+                            "concept": "Taco", "transactionId": "tx-pausa"}).encode()
+        headers = firmar(crudo)
+        headers["Content-Type"] = "application/json"
+        req = urllib.request.Request(self.base + "/webhooks/pey", data=crudo, headers=headers)
+        resp = json.load(urllib.request.build_opener().open(req))
+        self.assertTrue(resp["nuevo"])
+        self.assertEqual(conn.execute("select count(*) from pagos").fetchone()[0], 1)
+
+    def test_el_interruptor_solo_se_apaga_con_cero(self):
+        with mock.patch.dict(os.environ, {"COBROS_ACTIVOS": "0"}):
+            self.assertFalse(Config().cobros_activos)
+        with mock.patch.dict(os.environ) as env:
+            env.pop("COBROS_ACTIVOS", None)
+            self.assertTrue(Config().cobros_activos)
+        for valor in ("1", "si", ""):
+            with mock.patch.dict(os.environ, {"COBROS_ACTIVOS": valor}):
+                self.assertTrue(Config().cobros_activos)
 
     def test_fallo_de_envio_se_registra_sin_telefono_ni_cuerpo(self):
         self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
