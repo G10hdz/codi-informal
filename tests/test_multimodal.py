@@ -310,6 +310,16 @@ class OpenRouterTests(unittest.TestCase):
             with mock.patch("urllib.request.urlopen", falso):
                 self.assertEqual(openrouter.lector(b"j"), {"monto": "0.01", "concepto": "Torta"})
 
+    def test_lector_quita_el_signo_de_pesos(self):
+        # respuesta real de gemini-2.5-flash-lite con un ticket sintético
+        def falso(req, timeout=0):
+            return _completar('```json\n{"monto": "$0.01", "concepto": "2 tacos pastor"}\n```')
+
+        with mock.patch.dict(os.environ, ENV_OR):
+            with mock.patch("urllib.request.urlopen", falso):
+                leido = ticket.leer(b"j", lector=openrouter.lector)
+        self.assertEqual(leido, {"monto": Decimal("0.01"), "concepto": "2 tacos pastor"})
+
     def test_lector_rechaza_prosa_y_campos_faltantes(self):
         def falso(texto):
             return lambda req, timeout=0: _completar(texto)

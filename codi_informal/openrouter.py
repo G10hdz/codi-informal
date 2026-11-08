@@ -55,7 +55,9 @@ def lector(imagen_bytes) -> dict | None:
         data = _json(_completar(contenido))
         if not isinstance(data, dict) or "monto" not in data or "concepto" not in data:
             return None
-        return {"monto": data["monto"], "concepto": data["concepto"]}
+        # el modelo copia el total como viene impreso ("$0.01", "0.01 MXN"); ticket.leer valida el resto
+        monto = str(data["monto"]).strip().removeprefix("$").removesuffix("MXN").strip()
+        return {"monto": monto, "concepto": data["concepto"]}
     except Exception:
         return None
 
