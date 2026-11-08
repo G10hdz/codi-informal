@@ -154,6 +154,12 @@ class WhatsAppTests(unittest.TestCase):
         self.assertIn("5512345678", con_texto.texto)
         self.assertIn("Falta PEY_API_KEY", con_texto.texto)
 
+    def test_transcripcion_fallida_pide_la_orden_escrita(self):
+        agente = Agente(None, None, max_amount="0.01")
+        for texto in (None, "", "   "):
+            r = atender({"tipo": "audio", "audio_id": "abc"}, agente, transcribir=lambda i: texto)
+            self.assertEqual(r.texto, VOZ_SIN_TRANSCRIPCION)
+
     def test_el_mensaje_de_salida_es_el_de_la_cloud_api(self):
         cuerpo = cuerpo_texto("5215512345678", "Entró un pago")
         self.assertEqual(cuerpo["messaging_product"], "whatsapp")

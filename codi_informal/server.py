@@ -8,12 +8,15 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from codi_informal import openrouter, voz
 from codi_informal.agente import Agente, atender
 from codi_informal.firma import FirmaInvalida, verificar
 from codi_informal.limites import Limites
 from codi_informal.pey import Pey
 from codi_informal.registro import abrir, aviso, registrar_pago
-from codi_informal.whatsapp import cuerpo_imagen, cuerpo_texto, extraer, firma_valida, multipart_imagen
+from codi_informal.whatsapp import (
+    cuerpo_imagen, cuerpo_texto, descargar_media, extraer, firma_valida, multipart_imagen,
+)
 
 log = logging.getLogger("codi_informal")
 
@@ -36,6 +39,7 @@ class Config:
         self.whatsapp_verify_token = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
         self.whatsapp_app_secret = os.environ.get("WHATSAPP_APP_SECRET", "")
         self.owner_whatsapp = os.environ.get("OWNER_WHATSAPP", "")
+        self.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
         self.cobros_activos = os.environ.get("COBROS_ACTIVOS") != "0"
         self.limites_path = os.environ.get("LIMITES_PATH", "data/limites.sqlite")
         self.registro_path = os.environ.get("REGISTRO_PATH", "data/registro.sqlite")
@@ -58,6 +62,19 @@ def _censurar(telefono) -> str:
     return "***" + "".join(c for c in str(telefono) if c.isdigit())[-4:]
 
 
+def crear_transcribir(config: Config):
+    """audio_id -> texto o None: baja el ogg de Meta, mide su duración y lo
+    transcribe con OpenRouter (REQ-8)."""
+    def transcribir(audio_id):
+        return voz.transcribir(
+            audio_id,
+            descargar=lambda media_id, **kw: descargar_media(media_id, config.whatsapp_token, **kw),
+            transcriptor=openrouter.transcriptor,
+            duracion=voz.duracion,
+        )
+    return transcribir
+
+
 def handler(config: Config, conn, pey, limites=None):
     if limites is None:
         try:
@@ -66,6 +83,7 @@ def handler(config: Config, conn, pey, limites=None):
             log.warning("limites no disponibles: se bloquean los cobros")
     agente = Agente(pey, conn, max_amount=config.max_amount,
                     cobros_activos=config.cobros_activos)
+    transcribir = crear_transcribir(config) if config.openrouter_api_key else None
 
     class Bot(BaseHTTPRequestHandler):
         def log_message(self, formato, *args):
@@ -175,7 +193,7 @@ def handler(config: Config, conn, pey, limites=None):
                 self._avisar(de, rechazo)
                 self._json(200, {"ok": True})
                 return
-            resultado = atender(entrada, agente, dueno=de, chat=de)
+            resultado = atender(entrada, agente, transcribir=transcribir, dueno=de, chat=de)
             if resultado and resultado.texto:
                 self._avisar(de, resultado.texto, resultado.imagen, resultado.qr_texto)
             self._json(200, {"ok": True})
