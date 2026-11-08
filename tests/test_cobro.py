@@ -404,6 +404,63 @@ class ConciliacionTests(Base):
         self.assertNotIn(b"000000000000000000", open(os.path.join(self.carpeta.name, "r.sqlite"), "rb").read())
 
 
+class EventosPreviosTests(Base):
+    """Un webhook puede llegar antes de que se guarde la respuesta del POST."""
+
+    def evento(self, **extra):
+        e = {"type": "codi.pn.payment_received", "amount": 0.01, "concept": "Taco",
+             "transactionId": "tx-antes", "metadata": {"clabe": "000000000000000000"}}
+        e.update(extra)
+        return e
+
+    def test_se_concilia_al_ligar_el_transaction_id(self):
+        op = crear_operacion(self.conn, "d1", "c1", "push", 1, "Taco")
+        self.assertFalse(registrar_pago(self.conn, self.evento(), "w1"))
+        self.assertEqual(self.op()["estado"], "creando")
+        self.assertEqual(listar(self.conn), [])
+        marcar_operacion(self.conn, op["op_id"], "creada", transaction_id="tx-antes")
+        self.assertEqual(self.op()["estado"], "pagado")
+        self.assertEqual(len(listar(self.conn)), 1)
+
+    def test_monto_distinto_queda_pendiente_al_ligar(self):
+        op = crear_operacion(self.conn, "d1", "c1", "push", 1, "Taco")
+        self.assertFalse(registrar_pago(self.conn, self.evento(amount=0.02), "w1"))
+        marcar_operacion(self.conn, op["op_id"], "creada", transaction_id="tx-antes")
+        self.assertEqual(self.op()["estado"], "pendiente")
+        self.assertEqual(listar(self.conn), [])
+
+    def test_qr_se_concilia_al_ligar_el_qr_id(self):
+        op = crear_operacion(self.conn, "d1", "c1", "qr", 1, "Puesto")
+        evento = self.evento(type="codi.qr.payment_received", codiQrId="qr-antes",
+                             transactionId="txq-antes")
+        self.assertFalse(registrar_pago(self.conn, evento, "w1"))
+        marcar_operacion(self.conn, op["op_id"], "creada", qr_id="qr-antes")
+        self.assertEqual(self.op()["estado"], "pagado")
+        self.assertEqual(len(listar(self.conn)), 1)
+
+    def test_evento_previo_repetido_no_duplica(self):
+        op = crear_operacion(self.conn, "d1", "c1", "push", 1, "Taco")
+        self.assertFalse(registrar_pago(self.conn, self.evento(), "w1"))
+        self.assertFalse(registrar_pago(self.conn, self.evento(), "w2"))
+        marcar_operacion(self.conn, op["op_id"], "creada", transaction_id="tx-antes")
+        self.assertEqual(len(listar(self.conn)), 1)
+
+    def test_el_agente_avisa_si_el_pago_entro_antes_de_la_respuesta(self):
+        def transport(method, path, crudo, headers):
+            self.llamadas.append((path, json.loads(crudo)))
+            # el webhook llega mientras el POST sigue en vuelo
+            registrar_pago(self.conn, self.evento(), "w1")
+            return 200, json.dumps({"transactionId": "tx-antes", "codiId": "123"}).encode()
+
+        self.pey.transport = transport
+        a = self.agente()
+        r = a.cobrar(TEL, "0.01", "Taco", dueno="d1", chat="c1")
+        respuesta = a.responder(f"confirmar {self.codigo(r)}", dueno="d1", chat="c1")
+        self.assertEqual(self.op()["estado"], "pagado")
+        self.assertIn("Entró un pago", respuesta.texto)
+        self.assertEqual(len(listar(self.conn)), 1)
+
+
 class ServidorTests(unittest.TestCase):
     def arrancar(self, secreto):
         carpeta = tempfile.TemporaryDirectory()

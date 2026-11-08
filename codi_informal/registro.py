@@ -89,14 +89,57 @@ def crear_operacion(conn, dueno, chat, tipo, amount_cents, concept, bank_account
     raise RuntimeError("no se pudo reservar la operación")
 
 
-def marcar_operacion(conn, op_id, estado, transaction_id=None, qr_id=None) -> None:
+def marcar_operacion(conn, op_id, estado, transaction_id=None, qr_id=None) -> list[dict]:
+    """Liga el id de pey a la operación y concilia los eventos pendientes de ese id.
+
+    Devuelve los pagos que quedaron registrados en esta llamada.
+    """
     with _CANDADO:
         conn.execute(
             "update operaciones set estado=?, pey_transaction_id=coalesce(?, pey_transaction_id),"
             " codi_qr_id=coalesce(?, codi_qr_id) where op_id=?",
             (estado, transaction_id, qr_id, op_id),
         )
+        pagados = []
+        if transaction_id:
+            pagados = _reconciliar_pendientes(conn, op_id, por_qr=False, valor=str(transaction_id))
+        elif qr_id:
+            pagados = _reconciliar_pendientes(conn, op_id, por_qr=True, valor=str(qr_id))
         conn.commit()
+        return pagados
+
+
+def _reconciliar_pendientes(conn, op_id, por_qr: bool, valor: str) -> list[dict]:
+    fila = conn.execute("select * from operaciones where op_id=?", (op_id,)).fetchone()
+    if fila is None:
+        return []
+    if por_qr:
+        pendientes = conn.execute("select * from eventos where codi_qr_id=?", (valor,)).fetchall()
+    else:
+        pendientes = conn.execute("select * from eventos where transaction_id=?", (valor,)).fetchall()
+    pagados = []
+    for pendiente in pendientes:
+        transaction_id = str(pendiente["transaction_id"])
+        ya = conn.execute("select 1 from pagos where transaction_id=?", (transaction_id,)).fetchone()
+        if ya is not None:
+            conn.execute("delete from eventos where transaction_id=?", (transaction_id,))
+            continue
+        datos = {
+            "type": pendiente["tipo"],
+            "amount": pendiente["amount"],
+            "concept": pendiente["concept"],
+            "numRef": pendiente["num_ref"],
+            "datePaid": pendiente["date_paid"],
+            "bankAccountId": pendiente["bank_account_id"],
+            "codiQrId": pendiente["codi_qr_id"],
+        }
+        if not _monto_cuenta_ok(datos, fila):
+            conn.execute("update operaciones set estado=? where op_id=?", ("pendiente", op_id))
+            continue
+        if _recibir(conn, datos, transaction_id, op_id, pendiente["canal"], pendiente["puesto"],
+                    pendiente["webhook_id"]):
+            pagados.append(datos)
+    return pagados
 
 
 def tiene_incierto(conn, dueno) -> bool:

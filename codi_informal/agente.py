@@ -6,7 +6,7 @@ import time
 
 from codi_informal.confirmacion import Confirmaciones
 from codi_informal.pey import PeyError, PeyIncierto, centavos, pesos, telefono_mx, tope_centavos
-from codi_informal.registro import crear_operacion, listar, marcar_operacion, tiene_incierto
+from codi_informal.registro import aviso, crear_operacion, listar, marcar_operacion, tiene_incierto
 
 AYUDA = (
     "Soy el bot de cobros. Escríbeme, por ejemplo: cobra 0.01 al 5512345678. "
@@ -143,13 +143,17 @@ class Agente:
         except PeyError as exc:
             marcar_operacion(self.conn, op["op_id"], "fallida")
             return Resultado(f"pey no pudo cobrar: {exc.message}")
-        marcar_operacion(self.conn, op["op_id"], "creada", transaction_id=respuesta.get("transactionId"))
+        pagados = marcar_operacion(self.conn, op["op_id"], "creada",
+                                   transaction_id=respuesta.get("transactionId"))
         folio = respuesta.get("codiId") or respuesta.get("transactionId") or ""
-        return Resultado(
+        texto = (
             f"Le mandé el cobro de ${pesos(datos['cents'])} al {datos['telefono']}. "
             f"Le llega una notificación de su banco. Folio {folio}. "
             "Esto no quiere decir que ya pagó: aviso cuando entre el pago."
         )
+        for pago in pagados:
+            texto += " " + aviso(pago)
+        return Resultado(texto)
 
     def _qr(self, dueno, chat) -> Resultado:
         if self.pey is None:
@@ -180,12 +184,14 @@ class Agente:
         except PeyError as exc:
             marcar_operacion(self.conn, op["op_id"], "fallida")
             return Resultado(f"pey no pudo armar el QR: {exc.message}")
-        marcar_operacion(self.conn, op["op_id"], "creada", qr_id=respuesta.get("id"))
-        return Resultado(
+        pagados = marcar_operacion(self.conn, op["op_id"], "creada", qr_id=respuesta.get("id"))
+        texto = (
             f"QR del puesto por ${pesos(datos['cents'])}. Se puede dejar pegado. "
-            "Cuando alguien pague, aviso por aquí.",
-            _png(respuesta.get("qrImage")),
+            "Cuando alguien pague, aviso por aquí."
         )
+        for pago in pagados:
+            texto += " " + aviso(pago)
+        return Resultado(texto, _png(respuesta.get("qrImage")))
 
     def _lista(self) -> str:
         if self.conn is None:
