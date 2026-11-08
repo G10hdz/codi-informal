@@ -46,9 +46,11 @@ def descargar_media(media_id, credencial, *, max_bytes, timeout,
         req = urllib.request.Request(f"{api}/{media_id}", headers=auth)
         with _abrir(req, timeout) as r:
             meta = json.loads(r.read(65537) or b"{}")
-        if not _url_permitida(meta.get("url"), hosts):
+        # Kapso devuelve download_url (autenticada, en su host); Meta solo url (CDN)
+        bajar = meta.get("download_url") or meta.get("url")
+        if not _url_permitida(bajar, hosts):
             return None
-        req = urllib.request.Request(meta["url"], headers=auth)
+        req = urllib.request.Request(bajar, headers=auth)
         with _abrir(req, timeout) as r:
             try:
                 if int(r.headers.get("Content-Length") or 0) > max_bytes:
