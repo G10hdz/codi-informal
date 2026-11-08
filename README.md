@@ -1,6 +1,6 @@
-# codi-informal
+# Varísimo
 
-Bot de WhatsApp que cobra con CoDi. Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026.
+Bot de WhatsApp que cobra con CoDi. El repo se llama `codi-informal`. Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026.
 
 No hay frontend. El dueño escribe o manda una nota de voz, el bot pide el push o el QR a pey, y cuando el pago entra se lo avisa en el mismo chat.
 

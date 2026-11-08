@@ -17,7 +17,7 @@ Las instrucciones no piden un formato ni un video. Los jueces no van a correr el
 
 ## Qué lleva el correo
 
-1. Nombre del proyecto y del equipo.
+1. Proyecto: Varísimo. Nombre del equipo.
 2. Qué hace, en tres o cuatro líneas: cobro con CoDi por WhatsApp para quien trabaja en la informalidad. Texto, nota de voz o foto del ticket; push o QR por pey; confirmación antes de cobrar.
 3. Link al repo.
 4. Video de uno a dos minutos: pedir un cobro, confirmar, llega la notificación del banco, el bot avisa cuando entra el pago.

@@ -9,7 +9,7 @@ from codi_informal.pey import PeyError, PeyIncierto, centavos, pesos, telefono_m
 from codi_informal.registro import aviso, crear_operacion, listar, marcar_operacion, tiene_incierto
 
 AYUDA = (
-    "Soy el bot de cobros. Escríbeme, por ejemplo: cobra 0.01 al 5512345678. "
+    "Soy Varísimo, el bot de cobros. Escríbeme, por ejemplo: cobra 0.01 al 5512345678. "
     "O pídeme: manda el qr del puesto."
 )
 

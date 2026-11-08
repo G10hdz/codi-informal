@@ -12,9 +12,9 @@ _EN -= {"pesos"}
 
 _MENSAJES = {
     "AYUDA": {
-        "es": "Soy el bot de cobros. Escríbeme, por ejemplo: cobra 0.01 al 5512345678. "
+        "es": "Soy Varísimo, el bot de cobros. Escríbeme, por ejemplo: cobra 0.01 al 5512345678. "
               "O pídeme: manda el qr del puesto.",
-        "en": "I am the payments bot. Write to me, for example: cobra 0.01 al 5512345678. "
+        "en": "I am Varísimo, the payments bot. Write to me, for example: cobra 0.01 al 5512345678. "
               "Or ask: send the stall's qr.",
     },
     "TOPE": {

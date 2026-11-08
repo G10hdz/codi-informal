@@ -1,4 +1,4 @@
-# Capa CoDi para la economía informal
+# Varísimo: capa CoDi para la economía informal
 
 Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026.
 
