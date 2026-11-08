@@ -52,10 +52,6 @@ def pesos(cents: int) -> Decimal:
     return Decimal(cents).scaleb(-2)
 
 
-def dinero(valor) -> Decimal:
-    return pesos(centavos(valor))
-
-
 def telefono_mx(raw: str) -> str | None:
     digitos = "".join(caracter for caracter in raw if caracter.isdigit())
     if len(digitos) == 13 and digitos.startswith("521"):
