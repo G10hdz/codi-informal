@@ -16,6 +16,8 @@ WEBHOOK_SECRETO = "kapso-webhook-secreto"
 API_KEY = "kapso-api-key"
 PHONE_ID = "kapso-phone-1"
 DUENO = "5215500000001"
+API_MEDIA = "https://api.kapso.ai/meta/whatsapp/v24.0"
+DESCARGA = "https://api.kapso.ai/meta/whatsapp/media_download?token=t1"
 
 
 def firma_kapso(cuerpo, secreto=WEBHOOK_SECRETO):
@@ -67,6 +69,21 @@ def evento_imagen(mid, imagen_id="imgk1", de=DUENO, phone_id=PHONE_ID):
         "is_new_conversation": False,
         "phone_number_id": phone_id,
     }).encode()
+
+
+def meta_media(media_id, descarga=DESCARGA, url=None):
+    """Respuesta documentada de get-media-url: url es el CDN de Meta y
+    download_url el enlace autenticado de Kapso."""
+    doc = {
+        "messaging_product": "whatsapp",
+        "id": media_id,
+        "mime_type": "audio/ogg",
+        "url": url or f"https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid={media_id}",
+        "download_url": descarga,
+    }
+    if descarga is None:
+        doc.pop("download_url")
+    return _Media(json.dumps(doc).encode())
 
 
 def textos(vistos):
@@ -147,7 +164,7 @@ class DescargaKapsoTests(unittest.TestCase):
     def _bajar(self, falso, media_id="audk1"):
         with mock.patch("codi_informal.whatsapp._abrir", falso):
             return descargar_media(media_id, API_KEY, max_bytes=10, timeout=7,
-                                   api="https://api.kapso.ai/meta/whatsapp/v24.0",
+                                   api=API_MEDIA,
                                    auth={"X-API-Key": API_KEY}, hosts=("kapso.ai",))
 
     def test_pide_la_url_al_proxy_y_baja_con_x_api_key(self):
@@ -155,30 +172,35 @@ class DescargaKapsoTests(unittest.TestCase):
 
         def falso(req, timeout=0):
             vistos.append(req)
-            if req.full_url == "https://api.kapso.ai/meta/whatsapp/v24.0/audk1":
-                return _Media(b'{"url": "https://api.kapso.ai/media/audk1"}')
+            if req.full_url == f"{API_MEDIA}/audk1":
+                return meta_media("audk1")
             return _Media(b"BYTES-OGG")
 
         self.assertEqual(self._bajar(falso), b"BYTES-OGG")
         self.assertEqual([r.full_url for r in vistos], [
-            "https://api.kapso.ai/meta/whatsapp/v24.0/audk1",
-            "https://api.kapso.ai/media/audk1",
+            f"{API_MEDIA}/audk1",
+            DESCARGA,
         ])
         for req in vistos:
             self.assertEqual(req.headers["X-api-key"], API_KEY)
             self.assertFalse(req.has_header("Authorization"))
 
     def test_url_que_no_es_de_kapso_no_se_baja(self):
-        llamadas = []
+        for meta in (
+                meta_media("audk1", descarga="https://evil.test/steal"),
+                meta_media("audk1", descarga=None, url="https://evil.test/steal"),
+                meta_media("audk1", descarga=None),
+        ):
+            llamadas = []
 
-        def falso(req, timeout=0):
-            llamadas.append(req.full_url)
-            if req.full_url.endswith("/audk1"):
-                return _Media(b'{"url": "https://evil.test/steal"}')
-            return _Media(b"x")
+            def falso(req, timeout=0, m=meta):
+                llamadas.append(req.full_url)
+                if req.full_url == f"{API_MEDIA}/audk1":
+                    return m
+                return _Media(b"x")
 
-        self.assertIsNone(self._bajar(falso))
-        self.assertEqual(llamadas, ["https://api.kapso.ai/meta/whatsapp/v24.0/audk1"])
+            self.assertIsNone(self._bajar(falso), meta._d)
+            self.assertEqual(llamadas, [f"{API_MEDIA}/audk1"])
 
 
 class KapsoBase(Base):
@@ -271,7 +293,7 @@ class WebhookKapsoTests(KapsoBase):
         (req,) = vistos
         self.assertEqual(
             req.full_url,
-            f"https://api.kapso.ai/meta/whatsapp/v24.0/{PHONE_ID}/messages")
+            f"{API_MEDIA}/{PHONE_ID}/messages")
         self.assertEqual(req.headers["X-api-key"], API_KEY)
         self.assertFalse(req.has_header("Authorization"))
         cuerpo = json.loads(req.data)
@@ -322,7 +344,7 @@ class WebhookKapsoTests(KapsoBase):
                 self.post_kapso(evento("manda el qr", mid="q1"))
             self.post_kapso(evento(f"confirmar {CODIGO}", mid="q2"))
         urls = [r.full_url for r in vistos]
-        base = f"https://api.kapso.ai/meta/whatsapp/v24.0/{PHONE_ID}"
+        base = f"{API_MEDIA}/{PHONE_ID}"
         self.assertTrue(any(u == base + "/media" for u in urls), urls)
         for req in vistos:
             self.assertEqual(req.headers["X-api-key"], API_KEY)
@@ -339,8 +361,8 @@ class VozKapsoTests(KapsoBase):
 
     def _media(self, req, timeout=0):
         self.bajadas.append(req)
-        if req.full_url == "https://api.kapso.ai/meta/whatsapp/v24.0/audk1":
-            return _Media(b'{"url": "https://api.kapso.ai/media/audk1"}')
+        if req.full_url == f"{API_MEDIA}/audk1":
+            return meta_media("audk1")
         return _Media(self.OGG)
 
     def _red(self, enviados, transcript="cobra 0.01 al 5512345678"):
@@ -366,8 +388,8 @@ class VozKapsoTests(KapsoBase):
                 self.assertEqual(
                     self.post_kapso(evento(f"confirmar {CODIGO}", mid="v2")), 200)
             self.assertEqual([r.full_url for r in self.bajadas], [
-                "https://api.kapso.ai/meta/whatsapp/v24.0/audk1",
-                "https://api.kapso.ai/media/audk1",
+                f"{API_MEDIA}/audk1",
+                DESCARGA,
             ])
             for req in self.bajadas:
                 self.assertEqual(req.headers["X-api-key"], API_KEY)
@@ -382,14 +404,14 @@ class VozKapsoTests(KapsoBase):
 
             def media_rara(req, timeout=0):
                 bajadas.append(req.full_url)
-                if req.full_url.endswith("/audk1"):
-                    return _Media(b'{"url": "https://evil.test/aud"}')
+                if req.full_url == f"{API_MEDIA}/audk1":
+                    return meta_media("audk1", descarga="https://evil.test/aud")
                 return _Media(self.OGG)
 
             with mock.patch("urllib.request.urlopen", self._red(enviados, transcript=None)), \
                     mock.patch("codi_informal.whatsapp._abrir", media_rara):
                 self.assertEqual(self.post_kapso(evento_audio("v3")), 200)
-            self.assertEqual(bajadas, ["https://api.kapso.ai/meta/whatsapp/v24.0/audk1"])
+            self.assertEqual(bajadas, [f"{API_MEDIA}/audk1"])
             self.assertIn("nota de voz", textos(enviados)[0])
             self.assertEqual(self.pey.pushes, 0)
 
@@ -399,8 +421,8 @@ class TicketKapsoTests(KapsoBase):
 
     def test_foto_de_ticket_baja_por_kapso_y_se_lee(self):
         def media(req, timeout=0):
-            if req.full_url == "https://api.kapso.ai/meta/whatsapp/v24.0/imgk1":
-                return _Media(b'{"url": "https://api.kapso.ai/media/imgk1"}')
+            if req.full_url == f"{API_MEDIA}/imgk1":
+                return meta_media("imgk1")
             return _Media(self.JPEG)
 
         enviados = []
