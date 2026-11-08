@@ -524,5 +524,45 @@ class Req3Tests(Base):
         self.assertEqual(self.llamadas, [])
 
 
+class ReservaAtomicaTests(Base):
+    def test_segunda_confirmacion_no_llama_a_pey_mientras_la_primera_crea(self):
+        ag = self.agente()
+        a = self.codigo(ag.responder(f"cobra 0.01 al {TEL}", dueno="d", chat="c1"))
+        b = self.codigo(ag.responder(f"cobra 0.01 al {TEL}", dueno="d", chat="c2"))
+        dentro, soltar = threading.Event(), threading.Event()
+        original = self._transport
+
+        def lento(*args):
+            dentro.set()
+            soltar.wait(5)
+            return original(*args)
+
+        self.pey.transport = lento
+        hilo = threading.Thread(target=ag.responder, args=(f"confirmar {a}",), kwargs={"dueno": "d", "chat": "c1"})
+        hilo.start()
+        self.assertTrue(dentro.wait(5))
+        r = ag.responder(f"confirmar {b}", dueno="d", chat="c2")
+        soltar.set()
+        hilo.join(5)
+        self.assertEqual(len(self.llamadas), 1)
+        self.assertIn("otro cobro en curso", r.texto)
+
+
+class ResolverTests(Base):
+    def test_operador_resuelve_el_incierto_y_el_dueno_vuelve_a_cobrar(self):
+        from codi_informal.registro import inciertos, resolver
+        ag = self.agente()
+        self.error = TimeoutError()
+        ag.responder(f"confirmar {self.codigo(ag.responder(f'cobra 0.01 al {TEL}', dueno='d', chat='c'))}",
+                     dueno="d", chat="c")
+        (op,) = inciertos(self.conn)
+        self.assertFalse(resolver(self.conn, op["op_id"], "pendiente"))
+        self.assertTrue(resolver(self.conn, op["op_id"], "fallida"))
+        self.assertFalse(resolver(self.conn, op["op_id"], "fallida"))
+        self.error = None
+        r = ag.responder(f"cobra 0.01 al {TEL}", dueno="d", chat="c")
+        self.assertIn("confirmar", r.texto)
+
+
 if __name__ == "__main__":
     unittest.main()
