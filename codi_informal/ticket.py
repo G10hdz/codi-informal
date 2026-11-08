@@ -19,9 +19,9 @@ def leer(imagen_bytes, *, lector):
         if not _MONTO.fullmatch(crudo_monto):
             return None
         monto = Decimal(crudo_monto.replace(",", ""))
+        if not monto.is_finite() or monto <= 0 or monto != monto.quantize(Decimal("0.01")):
+            return None
     except (Exception, InvalidOperation):
-        return None
-    if not monto.is_finite() or monto <= 0 or monto != monto.quantize(Decimal("0.01")):
         return None
     concepto = _CUENTA.sub("", str(crudo.get("concepto") or ""))
     return {"monto": monto, "concepto": " ".join(concepto.split()) or "Ticket"}
