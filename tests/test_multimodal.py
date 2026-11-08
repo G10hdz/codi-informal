@@ -132,6 +132,10 @@ class TicketTests(unittest.TestCase):
                      "12.", "1e2", "+5", "1 234.50"):
             self.assertIsNone(ticket.leer(b"i", lector=lambda b, c=malo: {"monto": c, "concepto": "x"}))
 
+    def test_montos_extremos_o_no_finitos_no_levantan(self):
+        for malo in ("1e100", "NaN", "Infinity", "9" * 40):
+            self.assertIsNone(ticket.leer(b"i", lector=lambda b, c=malo: {"monto": c, "concepto": "x"}))
+
     def test_sin_monto_o_monto_invalido_es_none(self):
         for crudo in ({}, {"monto": ""}, {"monto": "abc"}, {"monto": "0"}, {"monto": "-5"},
                       {"monto": "NaN"}, {"monto": "Infinity"}, {"monto": "1.005"}):
