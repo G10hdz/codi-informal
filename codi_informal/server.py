@@ -193,7 +193,7 @@ def handler(config: Config, conn, pey, limites=None):
                 self._avisar(de, rechazo)
                 self._json(200, {"ok": True})
                 return
-            resultado = atender(entrada, agente)
+            resultado = atender(entrada, agente, dueno=de, chat=de)
             if resultado and resultado.texto:
                 qr_texto = None
                 if resultado.imagen is not None and pey_qr is not None:
