@@ -205,9 +205,13 @@ def handler(config: Config, conn, pey, limites=None):
                 return
             entrada = extraer_kapso(data) if kapso else extraer(data)
             # el evento tiene que ir dirigido a nuestro número; otro negocio de la app se ignora.
-            # con Kapso no hay metadata.phone_number_id: el secreto del webhook cubre G01
-            if (not kapso and (entrada.get("phone_number_id") or "")
-                    != (config.whatsapp_phone_number_id or "")):
+            # Kapso v2 lo trae en el nivel superior del payload; Meta en metadata.phone_number_id
+            if kapso:
+                para = data.get("phone_number_id") if isinstance(data, dict) else None
+            else:
+                para = entrada.get("phone_number_id")
+            esperado = config.kapso_phone_number_id if kapso else config.whatsapp_phone_number_id
+            if (para or "") != (esperado or ""):
                 self._json(200, {"ok": True})
                 return
             if entrada.get("tipo") == "status":
