@@ -144,12 +144,21 @@ def handler(config: Config, conn, pey, limites=None):
                 self._json(403, {"error": "remitente no autorizado"})
                 return
             de = entrada["de"]
+            # sin id de WhatsApp no hay dedupe posible: se ignora, no llega al agente
+            if not entrada.get("id"):
+                self._json(200, {"ok": True})
+                return
             try:
-                if entrada.get("id") and limites and limites.repetido(entrada["id"]):
+                if limites is None:
+                    raise RuntimeError("dedupe sin almacenamiento")
+                if limites.repetido(entrada["id"]):
                     self._json(200, {"ok": True})
                     return
             except Exception:
+                # un evento repetido no debe crear dos cargos: se pide reintento
                 log.warning("dedupe no disponible")
+                self._json(503, {"error": "reintenta más tarde"})
+                return
             texto = entrada.get("texto") or ""
             if len(texto) > MAX_TEXTO:
                 self._avisar(de, "El mensaje es muy largo. Escríbelo en menos de 2,000 caracteres.")

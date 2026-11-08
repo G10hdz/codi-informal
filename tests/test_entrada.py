@@ -152,6 +152,19 @@ class Dedupe(Base):
             self.assertFalse(Limites(ruta).repetido("wamid.x"))
             self.assertTrue(Limites(ruta).repetido("wamid.x"))
 
+    def test_mensaje_sin_id_no_llega_al_agente(self):
+        self.levantar()
+        with _codigo_fijo():
+            self.assertEqual(self.post(evento("cobra 0.01 al 5512345678", mid=None)), 200)
+        self.post(evento(f"confirmar {CODIGO}", mid="k-sin-id"))
+        self.assertEqual(self.pey.pushes, 0)
+
+    def test_dedupe_caido_reintenta_sin_cobrar(self):
+        self.levantar(limites_path="/no/existe/l.sqlite")
+        self.assertEqual(self.post(evento("cobra 0.01 al 5512345678")), 503)
+        self.post(evento(f"confirmar {CODIGO}", mid="k-caido"))
+        self.assertEqual(self.pey.pushes, 0)
+
 
 class Topes(Base):
     def test_content_length_grande_413(self):
@@ -183,7 +196,7 @@ class Limites_(Base):
 
     def test_sin_almacenamiento_bloquea_cobro(self):
         self.levantar(limites_path="/no/existe/l.sqlite")
-        self.post(evento("cobra 0.01 al 5512345678"))
+        self.assertEqual(self.post(evento("cobra 0.01 al 5512345678")), 503)
         self.assertEqual(self.pey.pushes, 0)
 
 
