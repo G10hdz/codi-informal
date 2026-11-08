@@ -1,3 +1,4 @@
+import http.client
 import json
 import os
 import re
@@ -277,6 +278,48 @@ class OperacionTests(Base):
         self.assertNotIn("Le mandé", r.texto)
         self.assertIn("sin resolver", r.texto.lower())
         self.assertEqual(self.llamadas, [])
+
+
+class InciertoTests(Base):
+    """El resultado de un POST de pey puede ser incierto: nunca queda creando ni fallida de más."""
+
+    def cobrar_con(self, transport=None):
+        if transport is not None:
+            self.pey.transport = transport
+        a = self.agente()
+        r = a.cobrar(TEL, "0.01", "x", dueno="d1", chat="c1")
+        return a.responder(f"confirmar {self.codigo(r)}", dueno="d1", chat="c1")
+
+    def test_5xx_queda_incierto(self):
+        r = self.cobrar_con(lambda *a: (500, b'{"error":{"message":"interno"}}'))
+        self.assertEqual(self.op()["estado"], "incierto")
+        self.assertIn("no sé", r.texto.lower())
+
+    def test_503_queda_incierto(self):
+        r = self.cobrar_con(lambda *a: (503, b'{"error":{"message":"mantenimiento"}}'))
+        self.assertEqual(self.op()["estado"], "incierto")
+        self.assertIn("no sé", r.texto.lower())
+
+    def test_lectura_parcial_queda_incierto(self):
+        self.error = http.client.IncompleteRead(b'{"x"', 5)
+        r = self.cobrar_con()
+        self.assertEqual(self.op()["estado"], "incierto")
+        self.assertEqual(len(self.llamadas), 1)
+        self.assertIn("no sé", r.texto.lower())
+
+    def test_json_truncado_queda_incierto(self):
+        r = self.cobrar_con(lambda *a: (200, b'{"transactionId": "tx1"'))
+        self.assertEqual(self.op()["estado"], "incierto")
+        self.assertIn("no sé", r.texto.lower())
+
+    def test_200_sin_cuerpo_queda_incierto(self):
+        r = self.cobrar_con(lambda *a: (200, b""))
+        self.assertEqual(self.op()["estado"], "incierto")
+
+    def test_4xx_sigue_fallida(self):
+        r = self.cobrar_con(lambda *a: (400, b'{"error":{"message":"mal"}}'))
+        self.assertEqual(self.op()["estado"], "fallida")
+        self.assertIn("no pudo cobrar", r.texto)
 
 
 class ConciliacionTests(Base):
