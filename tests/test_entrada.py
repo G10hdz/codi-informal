@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 import os
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -46,6 +47,23 @@ class _Respuesta:
         pass
 
 
+class _ConnConUnCommitRoto:
+    """Proxy de la conexion de limites: el primer commit falla, como un corte de disco."""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self._falla = True
+
+    def commit(self):
+        if self._falla:
+            self._falla = False
+            raise sqlite3.OperationalError("commit simulado")
+        self._conn.commit()
+
+    def __getattr__(self, nombre):
+        return getattr(self._conn, nombre)
+
+
 def _codigo_fijo():
     """Deja siempre el mismo código de confirmación para poder contestarlo."""
     return mock.patch("secrets.token_hex", lambda n: "a1b2c3")
@@ -64,7 +82,7 @@ def firma(cuerpo, secreto=APP):
 
 
 class Base(unittest.TestCase):
-    def levantar(self, **ajustes):
+    def levantar(self, limites=None, **ajustes):
         carpeta = tempfile.TemporaryDirectory()
         self.addCleanup(carpeta.cleanup)
         config = Config()
@@ -79,7 +97,7 @@ class Base(unittest.TestCase):
             setattr(config, k, v)
         self.pey = PeyDoble()
         httpd = ThreadingHTTPServer(
-            (config.host, 0), handler(config, abrir(config.registro_path), self.pey)
+            (config.host, 0), handler(config, abrir(config.registro_path), self.pey, limites)
         )
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         self.addCleanup(httpd.server_close)
@@ -175,6 +193,23 @@ class Dedupe(Base):
         self.assertEqual(self.post(evento("cobra 0.01 al 5512345678")), 503)
         self.post(evento(f"confirmar {CODIGO}", mid="k-caido"))
         self.assertEqual(self.pey.pushes, 0)
+
+    def test_commit_fallido_reintento_llega_al_agente(self):
+        from codi_informal.limites import Limites
+        carpeta = tempfile.TemporaryDirectory()
+        self.addCleanup(carpeta.cleanup)
+        lim = Limites(os.path.join(carpeta.name, "l.sqlite"))
+        lim._conn = _ConnConUnCommitRoto(lim._conn)
+        self.levantar(limites=lim)
+        with _codigo_fijo():
+            # el commit del dedupe falla en la primera entrega: 503 y sin borrador
+            self.assertEqual(
+                self.post(evento("cobra 0.01 al 5512345678", mid="wamid.commit")), 503)
+            # la reentrega del mismo id no es duplicado: llega al agente una sola vez
+            self.assertEqual(
+                self.post(evento("cobra 0.01 al 5512345678", mid="wamid.commit")), 200)
+        self.post(evento(f"confirmar {CODIGO}", mid="wamid.commit-ok"))
+        self.assertEqual(self.pey.pushes, 1)
 
 
 class Topes(Base):

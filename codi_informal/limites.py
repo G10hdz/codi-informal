@@ -17,10 +17,15 @@ class Limites:
     def repetido(self, mensaje_id: str) -> bool:
         """True si el id ya se había visto; si no, lo guarda."""
         with self._candado:
-            cur = self._conn.execute(
-                "insert or ignore into vistos (id, ts) values (?, ?)", (mensaje_id, time.time())
-            )
-            self._conn.commit()
+            try:
+                cur = self._conn.execute(
+                    "insert or ignore into vistos (id, ts) values (?, ?)", (mensaje_id, time.time())
+                )
+                self._conn.commit()
+            except Exception:
+                # sin rollback el insert queda pendiente y el reintento se marca como visto
+                self._conn.rollback()
+                raise
             return cur.rowcount == 0
 
     def permitir(self, dueno: str, clave: str, tope: int, ventana: float = 60, ahora=None) -> bool:
