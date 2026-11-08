@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>legibify</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --paper:#f7f7f9; --card:#ffffff; --ink:#26233d; --muted:#5d6478; --soft:#9a9db2; --rule:rgba(38,35,61,0.12); --accent:#7c5cf0; --at:rgba(124,92,240,.08); --new:#16a34a; --mod:#b45309; --del:#ef4444; }
+  [data-theme="dark"] { --paper:#14121f; --card:#211f30; --ink:#efedfb; --muted:#a49ece; --soft:#787a94; --rule:rgba(239,237,251,0.14); --accent:#bb86ff; --at:rgba(187,134,255,.14); --new:#4ade80; --mod:#f59e0b; --del:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font-family:Inter,system-ui,sans-serif; }
+  header { display:flex; align-items:baseline; gap:14px; padding:18px 26px 0; }
+  h1 { font-family:'Instrument Serif',Georgia,serif; font-weight:400; font-size:28px; margin:0; }
+  .eyebrow { font-family:'Space Mono',monospace; font-size:10px; letter-spacing:0.18em; color:var(--soft); text-transform:uppercase; }
+  .grow { flex:1; }
+  button { font-family:'Space Mono',monospace; font-size:11px; color:var(--ink); background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:6px 12px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); }
+
+  main { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px; padding:16px 26px 40px; align-items:start; }
+  .card { background:var(--card); border:1px solid var(--rule); border-radius:12px; padding:16px 18px; }
+  h2 { font-family:'Instrument Serif',Georgia,serif; font-weight:400; font-size:19px; margin:0 0 6px; }
+  p { font-size:13.5px; line-height:1.55; margin:4px 0; }
+  .risk { color:var(--del); }
+  aside.side { display:flex; flex-direction:column; gap:14px; position:sticky; top:12px; max-height:calc(100vh - 24px); overflow:auto; }
+  @media (max-width:1100px) {
+    main { grid-template-columns:1fr; }
+    aside.side { position:static; max-height:none; overflow:visible; }
+  }
+
+  /* ---- stage ---- */
+  .stage { padding:0; overflow:hidden; }
+  .stagebar { display:flex; align-items:center; gap:10px; padding:8px 14px; border-bottom:1px solid var(--rule); flex-wrap:wrap; }
+  #crumbs { display:flex; align-items:center; gap:6px; font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); }
+  .crumb { cursor:pointer; color:var(--muted); }
+  .crumb:hover { color:var(--accent); }
+  .crumb.cur { color:var(--ink); cursor:default; }
+  .crumbsep { color:var(--soft); }
+  .swrap { position:relative; margin-left:auto; }
+  #search { font-family:'Space Mono',monospace; font-size:10px; color:var(--ink); background:var(--paper); border:1px solid var(--rule); border-radius:8px; padding:5px 10px; width:190px; outline:none; }
+  #search:focus { border-color:var(--accent); }
+  .sres { position:absolute; right:0; top:30px; min-width:240px; background:var(--card); border:1px solid var(--rule); border-radius:10px; padding:4px; display:none; z-index:30; box-shadow:0 8px 30px rgba(0,0,0,.25); }
+  .sres.open { display:block; }
+  .sr-item { padding:6px 9px; border-radius:7px; cursor:pointer; font-size:11.5px; }
+  .sr-item .p { font-family:'Space Mono',monospace; font-size:8.5px; color:var(--soft); }
+  .sr-item.on { background:var(--at); }
+  .legend { display:flex; align-items:center; gap:6px; font-family:'Space Mono',monospace; font-size:9px; color:var(--soft); flex-wrap:wrap; }
+  .lchip { font-family:'Space Mono',monospace; font-size:9px; border:1px solid var(--rule); border-radius:20px; padding:2px 9px; cursor:pointer; color:var(--muted); background:transparent; }
+  .lchip[aria-pressed="false"] { opacity:.4; text-decoration:line-through; }
+  .lchip:hover { border-color:var(--accent); }
+  .sdot { width:7px; height:7px; border-radius:50%; display:inline-block; margin-left:4px; }
+  .stage svg { width:100%; height:auto; max-height:82vh; display:block; cursor:grab; touch-action:none; }
+  .stage svg:active { cursor:grabbing; }
+  .controls { display:flex; align-items:center; gap:8px; padding:10px 14px; border-top:1px solid var(--rule); flex-wrap:wrap; }
+  .dots { display:flex; gap:6px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--rule); cursor:pointer; }
+  .dot.on { background:var(--accent); }
+  .stepname { font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); }
+  .hint { font-family:'Space Mono',monospace; font-size:9px; color:var(--soft); }
+  .hintline { padding:0 14px 10px; font-family:'Space Mono',monospace; font-size:9px; color:var(--soft); }
+
+  /* ---- svg states ---- */
+  .nd { cursor:pointer; outline:none; }
+  .nd:focus-visible rect { stroke:var(--accent) !important; stroke-width:2 !important; }
+  .nd.sel rect, .frameg.sel rect { stroke:var(--accent) !important; stroke-width:2 !important; }
+  svg.foc .nd, svg.foc .ed, svg.foc .lane, svg.foc .frameg { opacity:.18; transition:opacity .15s; }
+  svg.foc .nd.hi, svg.foc .ed.hi, svg.foc .frameg.hi { opacity:1; }
+  .nd, .ed, .lane, .frameg { transition:opacity .15s; }
+  .ed .vis { stroke:var(--muted); stroke-opacity:.55; stroke-width:1.4; fill:none; }
+  .ed[data-type="touches"] .vis { stroke-dasharray:5 4; }
+  .ed.inf .vis { stroke-dasharray:1.5 3.5; }
+  .ed .hit { stroke:transparent; stroke-width:12; fill:none; pointer-events:stroke; cursor:pointer; }
+  .ed.hot .vis { stroke:var(--accent) !important; stroke-opacity:1; stroke-width:2.2; }
+  svg.live .ed.hot .vis { stroke-dasharray:6 8 !important; animation:dashmv .9s linear infinite; }
+  @keyframes dashmv { to { stroke-dashoffset:-14; } }
+  .ed.off { display:none; }
+  .edlab { font-family:'Space Mono',monospace; font-size:9px; fill:var(--soft); paint-order:stroke; stroke:var(--card); stroke-width:4px; stroke-linejoin:round; }
+  svg.many .edlab { display:none; }
+  svg.many .ed.hot .edlab, svg.many .ed:hover .edlab { display:block; }
+  .edlab.shy { display:none; }
+  .ed.hot .edlab.shy, .ed:hover .edlab.shy { display:block; }
+  .badge circle { fill:var(--muted); }
+  .badge text { fill:var(--card); font-family:'Space Mono',monospace; font-size:9px; }
+  .ed.hot .badge circle { fill:var(--accent); }
+  .nd .parts { font-family:'Space Mono',monospace; font-size:8px; fill:var(--accent); }
+  @media (prefers-reduced-motion: reduce) {
+    svg .ed.hot .vis { animation:none !important; }
+    .nd, .ed, .lane, .frameg { transition:none; }
+    .passport { transition:none !important; }
+  }
+
+  /* ---- narrow: sheet + wrapping controls ---- */
+  .pdrag, .px { display:none; }
+  @media (max-width:760px) {
+    main { padding:10px 12px 30px; }
+    .stage svg { max-height:62vh; }
+    .controls button { min-height:44px; min-width:44px; }
+    .dot { width:14px; height:14px; margin:15px 1px; }
+    .legend { flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding-bottom:2px; }
+    .swrap { width:100%; margin-left:0; }
+    #search { width:100%; }
+    .passport { position:fixed; left:8px; right:8px; bottom:0; z-index:50; max-height:72vh; overflow:auto; border-radius:16px 16px 0 0; transform:translateY(115%); transition:transform .22s ease; box-shadow:0 -10px 40px rgba(0,0,0,.4); }
+    .passport.open { transform:translateY(0); }
+    .passport.peek { max-height:40vh; }
+    .pdrag { display:block; width:44px; height:4px; border-radius:2px; background:var(--rule); margin:0 auto 10px; cursor:pointer; }
+    .px { display:flex; position:absolute; top:8px; right:10px; width:44px; height:44px; align-items:center; justify-content:center; font-size:15px; border:none; background:transparent; color:var(--muted); }
+  }
+
+  /* ---- passport ---- */
+  .passport .chips { display:flex; gap:6px; margin-bottom:8px; }
+  .kchip { font-family:'Space Mono',monospace; font-size:8px; letter-spacing:0.12em; border:1px solid var(--rule); border-radius:20px; padding:3px 9px; color:var(--muted); text-transform:uppercase; }
+  .kchip.st-new { color:var(--new); border-color:var(--new); }
+  .kchip.st-modified { color:var(--mod); border-color:var(--mod); }
+  .kchip.st-deleted { color:var(--del); border-color:var(--del); }
+  .kchip.st-context { color:var(--soft); }
+  .kchip.st-pr { color:var(--accent); border-color:var(--accent); }
+  .passport .t { font-size:15px; font-weight:600; margin-bottom:2px; }
+  .passport .pid { font-family:'Space Mono',monospace; font-size:9px; color:var(--soft); margin-bottom:8px; }
+  .passport .b { font-size:13px; color:var(--muted); line-height:1.55; }
+  .passport h3, .vhead { font-family:'Space Mono',monospace; font-size:9px; letter-spacing:0.16em; color:var(--soft); margin:14px 0 5px; font-weight:400; }
+  .passport ul.src { margin:0; padding-left:16px; font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); line-height:1.7; }
+  .rel { border-bottom:1px dashed var(--rule); }
+  .rel:last-child { border-bottom:none; }
+  .rel summary { font-size:11.5px; padding:5px 0; list-style:none; color:var(--ink); }
+  .rel summary::-webkit-details-marker { display:none; }
+  .rel .arrow { color:var(--accent); font-family:'Space Mono',monospace; font-size:10px; }
+  .rel .rt { font-family:'Space Mono',monospace; font-size:9px; color:var(--soft); }
+  .rel .via { font-family:'Space Mono',monospace; font-size:8.5px; color:var(--soft); }
+  .rel .goto { cursor:pointer; color:var(--ink); text-decoration:none; border-bottom:1px dotted var(--soft); }
+  .rel .goto:hover { color:var(--accent); border-color:var(--accent); }
+  .rel .rd { font-size:11.5px; color:var(--muted); line-height:1.55; padding:2px 0 8px 14px; }
+  .rel .rd .mono { font-family:'Space Mono',monospace; font-size:9px; color:var(--soft); }
+  .pill { display:inline-block; font-size:11px; padding:5px 10px; border:1px solid var(--rule); border-radius:8px; margin:2px 6px 2px 0; cursor:pointer; }
+  .pill:hover { border-color:var(--accent); color:var(--accent); }
+  .passport pre.hunk { font-family:'Space Mono',monospace; font-size:9.5px; line-height:1.55; background:var(--paper); border:1px solid var(--rule); border-radius:8px; padding:10px; white-space:pre-wrap; margin:6px 0 0; max-height:260px; overflow:auto; }
+  .passport pre.hunk .hl { display:block; }
+  .passport pre.hunk .hadd { color:var(--new); background:rgba(74,222,128,.07); }
+  .passport pre.hunk .hdel { color:var(--del); background:rgba(248,113,113,.07); }
+  .passport .hk { font-family:'Space Mono',monospace; font-size:9px; color:var(--soft); }
+  #copylink { margin-top:12px; width:100%; }
+  .stepbody { font-size:13px; color:var(--muted); line-height:1.55; }
+
+  .obs, .hyp { font-size:13px; line-height:1.5; padding:10px 12px; border-radius:8px; margin-top:8px; }
+  .obs { background:rgba(0,0,0,0.04); } [data-theme="dark"] .obs { background:rgba(255,255,255,0.05); }
+  .hyp { background:var(--at); border:1px solid var(--accent); }
+  ul.verify { margin:6px 0 0; padding-left:18px; font-size:13px; line-height:1.7; }
+  code { font-family:'Space Mono',monospace; font-size:11px; background:var(--at); border-radius:5px; padding:1px 6px; }
+  .checkcard .cq { font-size:13.5px; line-height:1.55; margin:6px 0 10px; }
+  .checkcard .ck { font-family:'Space Mono',monospace; font-size:9px; letter-spacing:.14em; color:var(--soft); }
+  .checkcard .missed { font-size:12.5px; color:var(--muted); line-height:1.6; padding-left:18px; margin:8px 0; }
+  .checkcard textarea { width:100%; min-height:120px; font-family:'Space Mono',monospace; font-size:10px; background:var(--paper); color:var(--ink); border:1px solid var(--rule); border-radius:8px; padding:8px; }
+  .checkcard .cbtns { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  details.prbody { border:1px dashed var(--rule); border-radius:12px; padding:12px 16px; }
+  details.prbody summary { cursor:pointer; font-size:13px; color:var(--muted); }
+  details.prbody pre { font-family:'Space Mono',monospace; font-size:11px; white-space:pre-wrap; line-height:1.5; margin:10px 0 0; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style id="repo-theme">
+:root { --paper:#fff7ec; --card:#ffffff; --ink:#1d1a16; --muted:#6b6258; --soft:#9a8f82; --rule:#efe3d3; --accent:#e8457a; --at:rgba(232,69,122,0.10); --new:#1f8a5b; --mod:#b45309; --del:#c4372d; }
+[data-theme="dark"] { --paper:#1a1612; --card:#25201a; --ink:#f5ebdc; --muted:#b5a898; --soft:#7d7266; --rule:#3a3228; --accent:#ff6b9a; --at:rgba(255,107,154,0.14); --new:#3fbf8a; --mod:#ffcf3f; --del:#ff7a6e; }
+body { font-family:Inter, sans-serif; }
+h1 { font-family:'Bricolage Grotesque', sans-serif; }
+</style>
+
+</head>
+<body>
+<script type="application/json" id="model">{"meta":{"id":"varisimo","rootLabel":"Varísimo","title":"Cómo funciona Varísimo","eyebrow":"Varísimo · cómo funciona · f6eb0d6","orientation":"auto","lang":"es","commit":"f6eb0d6","theme":{"default":"light","light":{"paper":"#fff7ec","card":"#ffffff","ink":"#1d1a16","muted":"#6b6258","soft":"#9a8f82","rule":"#efe3d3","accent":"#e8457a","at":"rgba(232,69,122,0.10)","new":"#1f8a5b","mod":"#b45309","del":"#c4372d"},"dark":{"paper":"#1a1612","card":"#25201a","ink":"#f5ebdc","muted":"#b5a898","soft":"#7d7266","rule":"#3a3228","accent":"#ff6b9a","at":"rgba(255,107,154,0.14)","new":"#3fbf8a","mod":"#ffcf3f","del":"#ff7a6e"},"fonts":{"display":"'Bricolage Grotesque', sans-serif","body":"Inter, sans-serif","href":"https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=Inter:wght@400;500;600&display=swap"}}},"nodes":[{"id":"varisimo","kind":"pr","title":"Varísimo","summary":"Un bot de WhatsApp que cobra con CoDi a través de pey. No tiene frontend: el dueño escribe o manda una nota de voz, y el bot le avisa cuando entra el pago.","sources":[],"sub":"bot de cobros · Python sin dependencias"},{"id":"wa","kind":"external","title":"WhatsApp","summary":"El chat del dueño. Entra y sale por Kapso o por la Cloud API de Meta, según `WHATSAPP_PROVIDER`.","sources":["codi_informal/server.py:44","codi_informal/whatsapp.py:10","codi_informal/whatsapp.py:11"],"sub":"Kapso o Meta"},{"id":"entrada","kind":"component","title":"Entrada","summary":"`server.py` recibe los dos webhooks y manda los avisos. Revisa firma, repetidos y cupo antes de llegar al agente.","sources":["codi_informal/server.py:111"],"status":"context","sub":"server.py"},{"id":"agente","kind":"component","title":"Agente","summary":"Entiende la orden, deja un borrador con código, y solo al confirmar crea la operación y llama a pey.","sources":["codi_informal/agente.py:61"],"status":"context","sub":"agente.py"},{"id":"registro","kind":"component","title":"Registro","summary":"SQLite con tres tablas: operaciones, pagos y eventos. Guarda la operación antes de llamar a pey y concilia el pago cuando llega.","sources":["codi_informal/registro.py:13"],"status":"context","sub":"registro.py"},{"id":"multi","kind":"component","title":"Voz y tickets","summary":"Convierte una nota de voz en texto y una foto de ticket en monto y concepto. Nada se guarda en disco.","sources":["codi_informal/voz.py:14","codi_informal/ticket.py:10"],"status":"context","sub":"voz · ticket"},{"id":"pey","kind":"external","title":"pey","summary":"La API de CoDi. Recibe `POST /codi/pn` (push) o `POST /codi/qr` y avisa cada pago con un webhook firmado.","sources":["codi_informal/pey.py:109","codi_informal/pey.py:124","docs/pey-api.md:16"],"sub":"api.pey.mx"},{"id":"vps","kind":"context","title":"VPS","summary":"El bot corre en un contenedor `codi-informal` en somas-vps. Caddy recibe el HTTPS y lo pasa al puerto local. Las llaves están en un `.env` del servidor.","sources":["docs/deploy.md:3","docs/deploy.md:9","docs/deploy.md:11"],"status":"context","sub":"Docker · Caddy · .env"},{"id":"wh-wa","kind":"part","title":"Webhook de WhatsApp","summary":"Valida la firma. Ignora estados, grupos, otros números y mensajes repetidos. Aplica el cupo. Si el dueño mandó audio, lo transcribe. Luego llama al agente.","sources":["codi_informal/server.py:180","codi_informal/server.py:266"],"status":"context","sub":"server.py:180-270","parent":"entrada","hunkTitle":"codi_informal/server.py:224","hunk":" if not _mismo_telefono(entrada.get(\"de\"), config.owner_whatsapp):\n     self._json(403, {\"error\": \"remitente no autorizado\"})"},{"id":"wh-pey","kind":"part","title":"Webhook de pey","summary":"Verifica la firma de pey. Solo atiende `codi.pn.payment_received` y `codi.qr.payment_received`. Si el pago concilia, avisa al dueño.","sources":["codi_informal/server.py:287","codi_informal/server.py:301"],"status":"context","sub":"server.py:287-319","parent":"entrada"},{"id":"firma","kind":"file","title":"firma.py","summary":"Revisa `webhook-id`, `webhook-timestamp` y `webhook-signature` contra el cuerpo crudo. Tolera 5 minutos de diferencia.","sources":["codi_informal/firma.py:23","codi_informal/firma.py:29"],"status":"context","sub":"Standard Webhooks","parent":"entrada"},{"id":"lim","kind":"file","title":"limites.py","summary":"Su propio SQLite. Guarda los ids de mensaje vistos y cuenta eventos por minuto: 10 mensajes y 3 cobros.","sources":["codi_informal/limites.py:17","codi_informal/limites.py:31","codi_informal/server.py:27"],"status":"context","sub":"limites.sqlite","parent":"entrada"},{"id":"aviso","kind":"part","title":"Respuesta al chat","summary":"Manda texto, o la imagen del QR. Si la imagen falla, la reintenta una vez y cae a texto. Sale por Kapso o por la Graph API.","sources":["codi_informal/server.py:332","codi_informal/server.py:321"],"status":"context","sub":"server.py:332-353","parent":"entrada"},{"id":"resp","kind":"part","title":"Leer la orden","summary":"`atender` recibe texto, audio o imagen. `responder` busca `confirmar`, una consulta, `cobra` o `qr`, en ese orden.","sources":["codi_informal/agente.py:232","codi_informal/agente.py:70"],"status":"context","sub":"agente.py:70-84, 232-256","parent":"agente"},{"id":"conf","kind":"file","title":"confirmacion.py","summary":"Un código de 6 caracteres, de un solo uso, que vence en 120 segundos. Vive en memoria: si el bot reinicia, se pide otro.","sources":["codi_informal/confirmacion.py:7","codi_informal/confirmacion.py:17"],"status":"context","sub":"en memoria","parent":"agente"},{"id":"tope","kind":"part","title":"Tope de prueba","summary":"Un monto de 0 o mayor que `PEY_MAX_AMOUNT` no pasa. El tope por omisión es 1 centavo. Se revisa al armar el borrador y otra vez al confirmar.","sources":["codi_informal/agente.py:110","codi_informal/agente.py:135","codi_informal/pey.py:40"],"status":"context","sub":"agente.py:110-118","parent":"agente"},{"id":"ejec","kind":"part","title":"Ejecutar el cobro","summary":"Crea la operación, llama a pey y marca el resultado: `creada`, `incierto` o `fallida`. Para push y para QR hace lo mismo.","sources":["codi_informal/agente.py:148","codi_informal/agente.py:194"],"status":"context","sub":"agente.py:148-218","parent":"agente"},{"id":"peycli","kind":"file","title":"pey.py","summary":"Cliente de la API de pey con `urllib`. Un timeout, un 5xx o una respuesta cortada lanzan `PeyIncierto`: no se reintenta.","sources":["codi_informal/pey.py:99","codi_informal/pey.py:156","codi_informal/pey.py:23"],"status":"context","sub":"pey.py","parent":"agente"},{"id":"crear","kind":"part","title":"Crear operación","summary":"Guarda la fila en `creando` antes de llamar a pey. Si ya hay una operación `creando` o `incierto`, no crea otra.","sources":["codi_informal/registro.py:72","codi_informal/registro.py:82"],"status":"context","sub":"registro.py:72-99","parent":"registro","hunkTitle":"codi_informal/registro.py:79-84 (excerpt)","hunk":" if conn.execute(\n     \"select 1 from operaciones where estado in ('creando', 'incierto') limit 1\",\n ).fetchone():\n     return None"},{"id":"marcar","kind":"part","title":"Marcar operación","summary":"Guarda el estado y el id de pey. Si el webhook llegó antes, concilia ese evento en la misma llamada.","sources":["codi_informal/registro.py:102","codi_informal/registro.py:115"],"status":"context","sub":"registro.py:102-119","parent":"registro"},{"id":"concilia","kind":"part","title":"Conciliación","summary":"Busca la operación por `transactionId` (push) o por `codiQrId` (QR). Si monto y cuenta coinciden, guarda el pago y marca `pagado`. Si no, deja el evento pendiente.","sources":["codi_informal/registro.py:263","codi_informal/registro.py:286","codi_informal/registro.py:122"],"status":"context","sub":"registro.py:122-152, 263-300","parent":"registro"},{"id":"resolver","kind":"part","title":"Resolver un incierto","summary":"El operador revisa en pey y cierra la operación como `fallida` o `creada`. Solo toca operaciones inciertas.","sources":["codi_informal/registro.py:347"],"status":"context","sub":"registro.py:347-357","parent":"registro"},{"id":"tablas","kind":"part","title":"Tablas","summary":"`operaciones` guarda cada cobro y su estado. `pagos` guarda lo que entró. `eventos` guarda lo que llegó sin operación o sin coincidir.","sources":["codi_informal/registro.py:13","codi_informal/registro.py:34","codi_informal/registro.py:18","codi_informal/registro.py:52"],"status":"context","sub":"registro.py:13-69","parent":"registro"},{"id":"voz","kind":"file","title":"voz.py","summary":"Baja el audio, mide su duración y solo transcribe si dura 60 segundos o menos y pesa 5 MB o menos.","sources":["codi_informal/voz.py:8","codi_informal/voz.py:14","codi_informal/voz.py:30"],"status":"context","sub":"voz.py","parent":"multi"},{"id":"ticket","kind":"file","title":"ticket.py","summary":"Acepta solo montos explícitos como `12`, `12.50` o `1,234.50`. Quita números largos del concepto, como cuentas o CLABEs.","sources":["codi_informal/ticket.py:10","codi_informal/ticket.py:19"],"status":"context","sub":"ticket.py","parent":"multi"},{"id":"orr","kind":"file","title":"openrouter.py","summary":"Dos funciones, `transcriptor` y `lector`, sobre `chat/completions`. Cualquier error devuelve `None`.","sources":["codi_informal/openrouter.py:27","codi_informal/openrouter.py:47","codi_informal/openrouter.py:67"],"status":"context","sub":"openrouter.py","parent":"multi"},{"id":"openrouter","kind":"external","title":"OpenRouter","summary":"El modelo es `google/gemini-2.5-flash-lite`, o el de `OPENROUTER_MODEL`. Sin `OPENROUTER_API_KEY` el bot pide el mensaje escrito.","sources":["codi_informal/openrouter.py:11","codi_informal/openrouter.py:12","codi_informal/server.py:121"],"sub":"openrouter.ai","parent":"multi"}],"edges":[{"id":"e-msg","from":"wa","to":"wh-wa","type":"webhook","label":"mensaje","summary":"WhatsApp avisa por `POST /webhooks/whatsapp` de cada mensaje que recibe el número del bot.","source":"codi_informal/server.py:153","order":1},{"id":"e-atender","from":"wh-wa","to":"resp","type":"calls","label":"atender","summary":"Si pasa la firma, los filtros y el cupo, el webhook llama a `atender`.","source":"codi_informal/server.py:266","order":2},{"id":"e-ejec","from":"resp","to":"ejec","type":"calls","label":"confirmar","summary":"Con `confirmar` y el código correcto, el agente ejecuta el cobro.","source":"codi_informal/agente.py:142","order":3},{"id":"e-crear","from":"ejec","to":"crear","type":"writes","label":"creando","summary":"Antes de llamar a pey, escribe la operación en `creando`.","source":"codi_informal/agente.py:149","order":4},{"id":"e-pey","from":"ejec","to":"peycli","type":"calls","label":"cobrar","summary":"Pide el push o el QR con el `numRef` de la operación.","source":"codi_informal/agente.py:153","order":5},{"id":"e-api","from":"peycli","to":"pey","type":"http","label":"POST","summary":"`POST /codi/pn` para el push, `POST /codi/qr` para el QR.","source":"codi_informal/pey.py:109","order":6},{"id":"e-hook","from":"pey","to":"wh-pey","type":"webhook","label":"pago","summary":"Cuando el pago entra, pey avisa por `POST /webhooks/pey`.","source":"codi_informal/server.py:150","order":7},{"id":"e-conc","from":"wh-pey","to":"concilia","type":"calls","label":"registrar_pago","summary":"El webhook llama a `registrar_pago`, que concilia el evento con la operación.","source":"codi_informal/server.py:305","order":8},{"id":"e-aviso","from":"aviso","to":"wa","type":"http","label":"aviso","summary":"Si el pago es nuevo, el servidor manda `Entró un pago de ...` al dueño.","source":"codi_informal/server.py:318","order":9},{"id":"e-hook-aviso","from":"wh-pey","to":"aviso","type":"calls","label":"avisar","summary":"El webhook de pey usa la misma salida que las respuestas del agente.","source":"codi_informal/server.py:318"},{"id":"e-borrador","from":"resp","to":"conf","type":"writes","label":"código","summary":"El borrador guarda un código de un solo uso para este dueño y este chat.","source":"codi_informal/agente.py:123"},{"id":"e-tope","from":"resp","to":"tope","type":"calls","label":"tope","summary":"Revisa el monto contra el tope de prueba.","source":"codi_informal/agente.py:97"},{"id":"e-marcar","from":"ejec","to":"marcar","type":"writes","label":"estado","summary":"Marca `creada`, `incierto` o `fallida` según la respuesta de pey.","source":"codi_informal/agente.py:166"},{"id":"e-concmarcar","from":"marcar","to":"concilia","type":"calls","label":"pendientes","summary":"Si el evento llegó antes que la respuesta de pey, `marcar_operacion` lo concilia.","source":"codi_informal/registro.py:115"},{"id":"e-firma","from":"wh-pey","to":"firma","type":"calls","label":"firma","summary":"Verifica la firma antes de leer el evento.","source":"codi_informal/server.py:289"},{"id":"e-lim","from":"wh-wa","to":"lim","type":"reads","label":"cupo","summary":"Descarta repetidos y aplica 10 mensajes y 3 cobros por minuto.","source":"codi_informal/server.py:235"},{"id":"e-voz","from":"wh-wa","to":"voz","type":"calls","label":"audio","summary":"Si llega audio, lo transcribe aquí para que cuente en el mismo cupo que el texto.","source":"codi_informal/server.py:256"},{"id":"e-foto","from":"resp","to":"ticket","type":"calls","label":"foto","summary":"Si llega una imagen, lee el monto. No cobra: dice lo leído y pide el texto del cobro.","source":"codi_informal/agente.py:244"},{"id":"e-vozor","from":"voz","to":"orr","type":"calls","label":"transcribe","summary":"Pasa la ruta del audio al transcriptor.","source":"codi_informal/voz.py:33"},{"id":"e-tickor","from":"ticket","to":"orr","type":"calls","label":"lee","summary":"Pasa los bytes de la foto al lector.","source":"codi_informal/ticket.py:17"},{"id":"e-or","from":"orr","to":"openrouter","type":"http","label":"POST","summary":"`POST` a `chat/completions` con audio o imagen en base64.","source":"codi_informal/openrouter.py:75"},{"id":"e-tablas","from":"concilia","to":"tablas","type":"writes","label":"pagos","summary":"Guarda el pago en `pagos` y cambia el estado de la operación.","source":"codi_informal/registro.py:245"},{"id":"e-crear-t","from":"crear","to":"tablas","type":"writes","label":"operaciones","summary":"Inserta la fila de `operaciones`.","source":"codi_informal/registro.py:89"},{"id":"e-res","from":"resolver","to":"tablas","type":"writes","label":"cierra","summary":"Cambia un `incierto` a `fallida` o `creada`.","source":"codi_informal/registro.py:353"},{"id":"e-vps","from":"vps","to":"entrada","type":"hosts","label":"Caddy","summary":"Caddy recibe el HTTPS y pasa los webhooks al puerto local `127.0.0.1:3320`.","source":"docs/deploy.md:11"}],"steps":[{"title":"El mensaje entra por el webhook","body":"WhatsApp avisa por `POST /webhooks/whatsapp`. El servidor revisa la firma y que el mensaje venga del dueño. Descarta repetidos y aplica el cupo.","view":"entrada","focus":["wh-wa","firma","lim","e-lim"],"hunkFrom":"wh-wa"},{"title":"El agente deja un borrador","body":"El agente lee `cobra 0.01 al 5512345678`, revisa el tope y guarda un código de un solo uso. Contesta con el borrador y `confirmar \u003ccódigo>`. Todavía no cobra nada.","view":"agente","focus":["resp","conf","tope","e-borrador","e-tope"]},{"title":"Confirmar crea la operación","body":"Con `confirmar \u003ccódigo>`, el agente escribe la operación en `creando` y solo después llama a pey. Si hay otra operación `creando` o `incierto`, no crea una nueva.","view":"registro","focus":["crear","tablas","e-crear-t"],"hunkFrom":"crear"},{"title":"pey crea el cobro","body":"El agente pide `POST /codi/pn` con el `numRef` de la operación. Si pey responde, la operación pasa a `creada`. Si no responde a tiempo, pasa a `incierto` y no se reintenta.","view":"agente","focus":["ejec","peycli","e-pey","e-marcar"]},{"title":"El banco le avisa a quien paga","body":"pey manda el push de CoDi al celular. Ese paso pasa fuera de este repo: el código solo espera el webhook.","view":null,"focus":["pey","e-api"]},{"title":"pey avisa que el pago entró","body":"pey llama a `POST /webhooks/pey`. El servidor verifica la firma y solo atiende los eventos de pago recibido.","view":"entrada","focus":["wh-pey","firma","e-firma"]},{"title":"El registro concilia el pago","body":"`registrar_pago` busca la operación por `transactionId`. Si monto y cuenta coinciden, guarda el pago y marca `pagado`. Si no coinciden, deja el evento pendiente.","view":"registro","focus":["concilia","marcar","tablas","e-tablas","e-concmarcar"],"hunkFrom":"concilia"},{"title":"El dueño recibe el aviso","body":"Si el pago es nuevo, el servidor manda `Entró un pago de $0.01` al mismo chat. Sin foto de comprobante y sin llamada.","view":null,"focus":["wa","entrada","e-aviso"]},{"title":"Voz y fotos usan el mismo camino","body":"Una nota de voz se transcribe con OpenRouter y entra al agente como texto. Una foto de ticket solo dice el monto leído: el cobro lo pide la persona por texto.","view":"multi","focus":["voz","ticket","orr","openrouter","e-or"]}],"sidebar":{"verdict":{"what":"Varísimo cobra con CoDi por WhatsApp: el dueño pide el cobro, confirma con un código, pey manda el push y el bot avisa cuando entra el pago.","why":"Quien vende en la informalidad no va a instalar otra app, y hoy el comprobante es una llamada o una foto.","risk":"El cobro mueve dinero real. Si pey no contesta a tiempo, la operación queda `incierto` y bloquea cobros nuevos hasta que alguien la revise."},"observation":["La operación se escribe en `creando` antes de llamar a pey (`agente.py:149`).","Sin `confirmar \u003ccódigo>` no hay llamada a pey (`agente.py:129-142`). El código vence en 120 segundos (`confirmacion.py:7`).","Un timeout, un 5xx o una respuesta cortada de pey dejan la operación en `incierto` y no se reintenta (`pey.py:168-183`, `agente.py:160-162`).","El tope por omisión es 1 centavo (`pey.py:12`, `pey.py:40-48`).","El código no usa Doppler. Las llaves se leen del entorno y viven en `/opt/codi-informal/.env` en el VPS (`docs/deploy.md:9`).","Hay seis estados de operación, no cinco: `creando`, `creada`, `incierto`, `fallida`, `pendiente` y `pagado` (`registro.py:93`, `:147`, `:259`)."],"hypothesis":["Un evento `pendiente` puede pasar a `pagado` si llega otro evento que sí coincide. Se deduce de `_recibir`, que no mira el estado anterior (`registro.py:243-260`). Ninguna prueba lo cubre.","El paso del banco a pey no está en este repo. El diagrama de secuencia lo muestra solo para ubicar el webhook."],"verify":["Correr `PYTHONPATH=. python3 -m unittest discover -s tests` y confirmar que pasa en `main`.","Revisar en el VPS que `docs/deploy.md` sigue igual: URL, puerto `3320` y la ruta del `.env`.","Revisar que `docs/pey-api.md` siga igual a la doc de pey (fecha de la copia: 2026-10-20).","Probar un cobro de `$0.01` de punta a punta y confirmar el aviso `Entró un pago`."],"prBody":"\u003c!-- legibify -->\n**Qué hace:** explica cómo funciona Varísimo, de la orden en WhatsApp al aviso del pago. **Por qué:** que quien se suma al repo lo entienda sin leer todo el código. **Riesgo:** ninguno funcional, es documentación.\n\u003c!-- /legibify -->"},"checks":[{"q":"Qué pasa si el bot llama a pey y pey no contesta a tiempo?","a":"Queda en estado incierto. El bot no reintenta para no cobrar doble y no deja crear otra operación hasta que el operador la cierre con `registro resolver`.","view":"agente","focus":["ejec","peycli"],"source":"codi_informal/agente.py:160"},{"q":"Por qué se escribe la operación antes de llamar a pey?","a":"Para que quede constancia aunque pey no responda, y para que el webhook del pago tenga una operación con la que conciliar.","view":"registro","focus":["crear"],"source":"codi_informal/registro.py:72"},{"q":"Qué pasa si el webhook de pey llega antes de que la operación quede `creada`?","a":"El evento espera en la tabla `eventos`. Cuando `marcar_operacion` guarda el id de pey, concilia ese evento y marca `pagado`.","view":"registro","focus":["marcar","concilia","e-concmarcar"],"source":"codi_informal/registro.py:102"},{"q":"Qué hace el bot con la foto de un ticket?","a":"Dice el monto y el concepto que leyó y pide que la persona escriba el cobro. Nada va a pey desde la foto.","view":"multi","focus":["ticket"],"source":"codi_informal/agente.py:241"}]}</script>
+<header>
+  <div>
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 id="title"></h1>
+  </div>
+  <div class="grow"></div>
+  <button id="themebtn" data-t="themeBtn">day / night</button>
+</header>
+
+<main>
+  <div class="card stage">
+    <div class="stagebar">
+      <div id="crumbs"></div>
+      <div class="legend" id="legend"></div>
+      <div class="swrap">
+        <input id="search" placeholder="Search nodes… ( / )" autocomplete="off" data-tph="searchPh">
+        <div class="sres" id="sres"></div>
+      </div>
+    </div>
+    <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arw" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="var(--muted)"/></marker>
+        <marker id="arwA" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="var(--accent)"/></marker>
+      </defs>
+      <g id="world"></g>
+    </svg>
+    <div class="hintline" data-t="hintLine">Arrows follow how the change propagates · click a card with parts to open it · Esc goes up · / searches</div>
+    <div class="controls">
+      <button id="prev">◀</button>
+      <button id="play" data-t="play">▶ walkthrough</button>
+      <button id="next">▶|</button>
+      <div class="dots" id="dots"></div>
+      <button id="live" aria-pressed="false">Still</button>
+      <button id="orientbtn" title="change orientation" data-tt="orientTitle">⇄</button>
+      <button id="fit" title="fit view" data-tt="fitTitle">⤢</button>
+      <div class="grow"></div>
+      <span class="hint" id="hintfine" data-t="hintFine">drag = pan · wheel = zoom</span>
+      <span class="stepname" id="sname"></span>
+    </div>
+  </div>
+
+  <aside class="side">
+    <div class="card passport" id="passport"></div>
+    <div class="card checkcard" id="checkcard" hidden>
+      <h2 data-t="checksTitle">Check your understanding</h2>
+      <div id="checkbody"></div>
+    </div>
+    <div class="card verdict">
+      <h2 data-t="vTitle">L0 · Verdict</h2>
+      <p><b data-t="vWhat">What it does:</b> <span id="v-what"></span></p>
+      <p><b data-t="vWhy">Why:</b> <span id="v-why"></span></p>
+      <p class="risk"><b data-t="vRisk">Risk:</b> <span id="v-risk"></span></p>
+    </div>
+    <div class="card">
+      <h2 data-t="ohTitle">Observation vs hypothesis</h2>
+      <div id="obshyp"></div>
+      <ul class="verify" id="verify"></ul>
+    </div>
+    <details class="prbody">
+      <summary data-t="prbodySum">How it goes in the PR body</summary>
+      <pre id="prbody"></pre>
+    </details>
+  </aside>
+</main>
+
+<script>
+'use strict';
+const M = JSON.parse(document.getElementById('model').textContent);
+const LANG = M.meta.lang === 'es' ? 'es' : 'en';
+const I18N = {
+  en: {
+    themeBtn: 'day / night', searchPh: 'Search nodes… ( / )',
+    hintLine: 'Arrows follow how the change propagates · click a card with parts to open it · Esc goes up · / searches',
+    orientTitle: 'change orientation', fitTitle: 'fit view',
+    hintFine: 'drag = pan · wheel = zoom', hintCoarse: 'drag = move · pinch = zoom',
+    checksTitle: 'Check your understanding',
+    vTitle: 'L0 · Verdict', vWhat: 'What it does:', vWhy: 'Why:', vRisk: 'Risk:',
+    ohTitle: 'Observation vs hypothesis', obs: 'Observation', hyp: 'Hypothesis',
+    verifyHead: 'TO VERIFY', prbodySum: 'How it goes in the PR body',
+    conns: 'Connections:', inside: 'INSIDE', partOf: 'parts',
+    close: 'close',
+    st: { new: 'NEW', modified: 'MODIFIED', deleted: 'DELETED', context: 'CONTEXT' },
+    kind: { pr: 'THIS CHANGE', component: 'COMPONENT', file: 'FILE', part: 'PART', context: 'CONTEXT', external: 'EXTERNAL' },
+    srcs: 'Sources', partsH: 'Parts', incH: 'Incoming', outH: 'Outgoing',
+    via: ' via ', order: 'order ', inferred: 'inferred', edgesH: 'Model edges',
+    copyLink: 'Copy link', copied: 'Copied',
+    phT: 'Click a card or an edge',
+    phB: 'Every card and every connection opens its detail: what changed, its sources, its relations and the diff hunk.',
+    checkChip: 'CHECK', knew: 'I knew it', missed: "I didn't",
+    done: 'DONE', knewN: 'You knew {k} of {n}.', cardsReview: 'Cards to review ({m})', repeat: 'Repeat',
+    reveal: 'Reveal', copyAnki: 'Copy for Anki', copyObsidian: 'Copy for Obsidian', copyHypatia: 'Copy for Hypatia',
+    srcLabel: 'Source:', play: '▶ walkthrough', pause: '❚❚'
+  },
+  es: {
+    themeBtn: 'día / noche', searchPh: 'Buscar nodo… ( / )',
+    hintLine: 'Las flechas siguen la propagación del cambio · click en una tarjeta con partes para abrirla · Esc sube · / busca',
+    orientTitle: 'cambiar orientación', fitTitle: 'encajar',
+    hintFine: 'drag = pan · rueda = zoom', hintCoarse: 'arrastra = mover · pellizca = zoom',
+    checksTitle: 'Comprueba lo que entendiste',
+    vTitle: 'L0 · Veredicto', vWhat: 'Qué hace:', vWhy: 'Por qué:', vRisk: 'Riesgo:',
+    ohTitle: 'Observación vs hipótesis', obs: 'Observación', hyp: 'Hipótesis',
+    verifyHead: 'POR VERIFICAR', prbodySum: 'Así va dentro del PR body',
+    conns: 'Conexiones:', inside: 'DENTRO DE', partOf: 'partes',
+    close: 'cerrar',
+    st: { new: 'NUEVO', modified: 'MODIFICADO', deleted: 'ELIMINADO', context: 'CONTEXTO' },
+    kind: { pr: 'ESTE CAMBIO', component: 'COMPONENTE', file: 'ARCHIVO', part: 'PARTE', context: 'CONTEXTO', external: 'EXTERNO' },
+    srcs: 'FUENTES', partsH: 'PARTES', incH: 'ENTRANTES', outH: 'SALIENTES',
+    via: '  vía ', order: 'orden ', inferred: 'inferida', edgesH: 'ARISTAS DEL MODELO',
+    copyLink: 'copiar link', copied: 'copiado',
+    phT: 'Click en una tarjeta o arista',
+    phB: 'Cada card y cada conexión abre su detalle: qué cambió, sus fuentes, sus relaciones y el hunk del diff.',
+    checkChip: 'CHECK', knew: 'La sabía', missed: 'No la sabía',
+    done: 'LISTO', knewN: 'Sabías {k} de {n}.', cardsReview: 'Tarjetas para repasar ({m})', repeat: 'Repetir',
+    reveal: 'Revelar', copyAnki: 'Copiar para Anki', copyObsidian: 'Copiar para Obsidian', copyHypatia: 'Copiar para Hypatia',
+    srcLabel: 'Fuente:', play: '▶ walkthrough', pause: '❚❚'
+  }
+};
+const T = I18N[LANG] || I18N.en;
+const tr = (k, vars) => {
+  let s = T[k] != null ? T[k] : I18N.en[k] != null ? I18N.en[k] : k;
+  if (vars) for (const v in vars) s = s.split('{' + v + '}').join(vars[v]);
+  return s;
+};
+document.documentElement.lang = LANG;
+const $ = id => document.getElementById(id);
+document.querySelectorAll('[data-t]').forEach(el => { el.textContent = tr(el.dataset.t); });
+document.querySelectorAll('[data-tph]').forEach(el => { el.placeholder = tr(el.dataset.tph); });
+document.querySelectorAll('[data-tt]').forEach(el => { el.title = tr(el.dataset.tt); });
+const SVGNS = 'http://www.w3.org/2000/svg';
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- model indexes ----------
+const N = new Map(M.nodes.map(n => [n.id, n]));
+const E = new Map(M.edges.map(e => [e.id || (e.from + '->' + e.to), e]));
+M.edges.forEach(e => { if (!e.id) e.id = e.from + '->' + e.to; });
+const kids = new Map();
+M.nodes.forEach(n => { if (n.parent) { (kids.get(n.parent) || kids.set(n.parent, []).get(n.parent)).push(n); } });
+function childrenOf(id) { return kids.get(id) || []; }
+function hasKids(id) { return childrenOf(id).length > 0; }
+function isDesc(a, b) { // is a a descendant of b (or equal)
+  for (let x = a; x; x = N.get(x) && N.get(x).parent) { if (x === b) return true; }
+  return false;
+}
+function descSet(id) { const s = new Set(); (function w(x) { s.add(x); childrenOf(x).forEach(c => w(c.id)); })(id); return s; }
+function topAnc(id) { let x = id; while (N.get(x).parent) x = N.get(x).parent; return x; }
+
+// ---------- state ----------
+let view = null;            // null | nodeId
+let sel = null;             // {kind:'node'|'edge', id}
+let stepI = -1, timer = null;
+let live = !RM ? true : false;
+let orientOv = null;        // 'h' | 'v' | null
+const hiddenT = new Set();
+let hoverF = null;          // transient hover focus set
+let checkRevealed = null;   // checks[] item while its answer is open
+let L = null;               // current layout
+let fitBox = null;
+let vb = null;              // current viewBox {x,y,w,h}
+
+// ---------- text helpers ----------
+function md(s) {
+  const esc = String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc.replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(parent, x, y, s, attrs) {
+  const t = el('text', Object.assign({ x, y }, attrs || {}), parent);
+  t.textContent = s;
+  return t;
+}
+const ST_LABEL = T.st;
+const KIND_LABEL = T.kind;
+const ST_COLOR = { new: 'var(--new)', modified: 'var(--mod)', deleted: 'var(--del)', context: 'var(--rule)' };
+function chipInfo(n) {
+  if (n.kind === 'pr') return { t: KIND_LABEL.pr, c: 'var(--accent)' };
+  if (n.kind === 'external') return { t: KIND_LABEL.external, c: 'var(--soft)' };
+  const st = n.status || 'context';
+  return { t: ST_LABEL[st] || st.toUpperCase(), c: st === 'context' ? 'var(--soft)' : ST_COLOR[st] };
+}
+function borderOf(n) {
+  if (n.kind === 'pr' || n.kind === 'external') return 'var(--rule)';
+  return ST_COLOR[n.status] || 'var(--rule)';
+}
+
+// ---------- view math ----------
+// rep(n): visible representative of model node n in current view
+function rep(n) {
+  if (view && n === view) return { frame: true };
+  if (!view) return { id: topAnc(n), proxy: false };
+  if (isDesc(n, view)) {
+    let x = n; while (N.get(x).parent !== view) x = N.get(x).parent;
+    return { id: x, proxy: false };
+  }
+  // outside: walk up until parent is an ancestor of view or null
+  const ancV = new Set(); for (let x = N.get(view).parent; x; x = N.get(x).parent) ancV.add(x);
+  let x = n;
+  while (N.get(x).parent && !ancV.has(N.get(x).parent)) x = N.get(x).parent;
+  return { id: x, proxy: true };
+}
+function visible(nid) { // is nid rendered as its own card/proxy/frame in this view
+  if (view && nid === view) return true;
+  const r = rep(nid);
+  if (r.frame) return nid === view;
+  if (r.id !== nid) return false;
+  if (r.proxy) return true; // appears as outside proxy card
+  return true;
+}
+
+function computeView() {
+  const inside = childrenOf(view || null) && (view ? childrenOf(view) : M.nodes.filter(n => !n.parent));
+  const inSet = new Set(inside.map(n => n.id));
+  // lift edges
+  const lifted = [], dropped = [];
+  for (const e of M.edges) {
+    const a = rep(e.from), b = rep(e.to);
+    if (!a.frame && !b.frame && a.id === b.id) { dropped.push(e); continue; }
+    if (a.frame && b.frame) { dropped.push(e); continue; }
+    const aP = a.frame ? false : (a.proxy || !inSet.has(a.id));
+    const bP = b.frame ? false : (b.proxy || !inSet.has(b.id));
+    if (!a.frame && !b.frame && aP && bP) { dropped.push(e); continue; }
+    lifted.push({ e, a, b });
+  }
+  // group by (fromRep,toRep,type)
+  const groups = new Map();
+  for (const l of lifted) {
+    const ka = l.a.frame ? '#frame' : l.a.id, kb = l.b.frame ? '#frame' : l.b.id;
+    const key = ka + '>' + kb + '|' + l.e.type;
+    if (!groups.has(key)) groups.set(key, { key, a: l.a, b: l.b, type: l.e.type, members: [], label: l.e.label, order: l.e.order, inferred: false });
+    const g = groups.get(key);
+    g.members.push(l.e);
+    if (l.e.inferred) g.inferred = true;
+    if (l.e.order != null && g.order == null) g.order = l.e.order;
+  }
+  const lEdges = [...groups.values()];
+  // proxies
+  const proxies = new Map();
+  for (const g of lEdges) {
+    for (const side of ['a', 'b']) {
+      const r = g[side];
+      if (!r.frame && !inSet.has(r.id)) proxies.set(r.id, { id: r.id, into: 0, outof: 0 });
+    }
+  }
+  for (const g of lEdges) {
+    const aIn = !g.a.frame && inSet.has(g.a.id), bIn = !g.b.frame && inSet.has(g.b.id);
+    if (proxies.has(g.a.id)) { if (bIn || g.b.frame) proxies.get(g.a.id).outof++; }
+    if (proxies.has(g.b.id)) { if (aIn || g.a.frame) proxies.get(g.b.id).into++; }
+  }
+  const up = [], down = [];
+  for (const p of proxies.values()) {
+    if (p.outof > 0 && p.into === 0) up.push(p.id); else down.push(p.id);
+  }
+  return { inside, inSet, lEdges, dropped, up, down };
+}
+
+// ---------- layout ----------
+const CW = 210, CH = 64, RGAP = 110, SGAP = 28, DSLOT = 22, PAD = 34;
+function layoutView(V) {
+  const { inside, inSet, lEdges, up, down } = computeView();
+  // item for each inside card
+  const items = new Map();
+  inside.forEach(n => items.set(n.id, { id: n.id, node: n, proxy: false }));
+  up.concat(down).forEach(id => items.set(id, { id, node: N.get(id), proxy: true }));
+  // ranking over inside only
+  const adj = new Map(inside.map(n => [n.id, []]));
+  const rev = new Set();
+  for (const g of lEdges) {
+    if (g.a.frame || g.b.frame) continue;
+    if (!inSet.has(g.a.id) || !inSet.has(g.b.id)) continue;
+    if (g.members.every(m => m.constraint === false)) continue;
+    adj.get(g.a.id).push({ to: g.b.id, g });
+  }
+  // DFS cycle break
+  const color = new Map();
+  function dfs(u) {
+    color.set(u, 1);
+    for (const { to, g } of adj.get(u)) {
+      if (color.get(to) === 1) { rev.add(g.key); continue; }
+      if (!color.get(to)) dfs(to);
+    }
+    color.set(u, 2);
+  }
+  inside.forEach(n => { if (!color.get(n.id)) dfs(n.id); });
+  // build DAG adj (with back edges reversed for ranking)
+  const dag = new Map(inside.map(n => [n.id, []]));
+  for (const g of lEdges) {
+    if (g.a.frame || g.b.frame) continue;
+    if (!inSet.has(g.a.id) || !inSet.has(g.b.id)) continue;
+    if (g.members.every(m => m.constraint === false)) continue;
+    if (rev.has(g.key)) dag.get(g.b.id).push(g.a.id);
+    else dag.get(g.a.id).push(g.b.id);
+  }
+  const rank = new Map(inside.map(n => [n.id, 0]));
+  const indeg = new Map(inside.map(n => [n.id, 0]));
+  dag.forEach((ts, u) => ts.forEach(v => indeg.set(v, indeg.get(v) + 1)));
+  const q = inside.map(n => n.id).filter(id => indeg.get(id) === 0);
+  const seen = new Set(q);
+  while (q.length) {
+    const u = q.shift();
+    for (const v of dag.get(u)) {
+      rank.set(v, Math.max(rank.get(v), rank.get(u) + 1));
+      indeg.set(v, indeg.get(v) - 1);
+      if (indeg.get(v) === 0) { q.push(v); seen.add(v); }
+    }
+  }
+  inside.forEach(n => { if (!seen.has(n.id)) rank.set(n.id, 0); });
+  const maxR = Math.max(0, ...rank.values());
+  // dummies for spanning edges
+  const cols = new Map(); // rank -> [itemIds]
+  for (let r = 0; r <= maxR; r++) cols.set(r, []);
+  inside.forEach(n => cols.get(rank.get(n.id)).push(n.id));
+  // keep model order inside ranks
+  const mIdx = new Map(M.nodes.map((n, i) => [n.id, i]));
+  cols.forEach(c => c.sort((a, b) => mIdx.get(a) - mIdx.get(b)));
+  const dummies = [];
+  const chains = [];
+  for (const g of lEdges) {
+    if (g.a.frame || g.b.frame) { chains.push({ g, seq: null }); continue; }
+    const ra = inSet.has(g.a.id) ? rank.get(g.a.id) : (up.includes(g.a.id) ? -1 : maxR + 1);
+    const rb = inSet.has(g.b.id) ? rank.get(g.b.id) : (up.includes(g.b.id) ? -1 : maxR + 1);
+    if (Math.abs(rb - ra) > 1) {
+      const seq = [g.a.id], step = rb > ra ? 1 : -1;
+      for (let r = ra + step; r !== rb; r += step) {
+        const d = { id: 'd' + dummies.length, dummy: true, g };
+        dummies.push(d); items.set(d.id, d);
+        if (!cols.has(r)) cols.set(r, []);
+        cols.get(r).push(d.id);
+        seq.push(d.id);
+      }
+      seq.push(g.b.id);
+      chains.push({ g, seq });
+    } else {
+      chains.push({ g, seq: [g.a.id, g.b.id] });
+    }
+  }
+  cols.set(-1, up.slice()); cols.set(maxR + 1, down.slice());
+  const lo = up.length ? -1 : 0, hi = maxR + (down.length ? 1 : 0);
+  // neighbor pairs for barycenter
+  const nbr = new Map(); // itemId -> Set(itemId)
+  const link = (a, b) => { if (!nbr.has(a)) nbr.set(a, new Set()); if (!nbr.has(b)) nbr.set(b, new Set()); nbr.get(a).add(b); nbr.get(b).add(a); };
+  for (const c of chains) { if (c.seq) for (let i = 0; i + 1 < c.seq.length; i++) link(c.seq[i], c.seq[i + 1]); }
+  // barycenter sweeps: down, up, down, up
+  const posOf = new Map();
+  function setPos() { for (let r = lo; r <= hi; r++) { const c = cols.get(r) || []; c.forEach((id, i) => posOf.set(id, i)); } }
+  function sweep(dir) {
+    const rs = []; for (let r = lo; r <= hi; r++) rs.push(r);
+    if (dir < 0) rs.reverse();
+    for (const r of rs) {
+      const c = cols.get(r); if (!c || !c.length) continue;
+      const fixed = dir > 0 ? r - 1 : r + 1;
+      const bary = new Map();
+      c.forEach((id, i) => {
+        const ns = [...(nbr.get(id) || [])].map(x => { const xr = colOf(x); return xr === fixed ? posOf.get(x) : null; }).filter(v => v != null);
+        bary.set(id, ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : i);
+      });
+      // group contiguity: blocks by node.group (cards only)
+      const blocks = new Map();
+      c.forEach(id => {
+        const it = items.get(id);
+        const gk = (it.node && it.node.group) ? 'g:' + it.node.group : 'i:' + id;
+        if (!blocks.has(gk)) blocks.set(gk, []);
+        blocks.get(gk).push(id);
+      });
+      const barr = [...blocks.values()].map(mems => ({
+        mems: mems.sort((a, b) => bary.get(a) - bary.get(b)),
+        b: mems.reduce((s, id) => s + bary.get(id), 0) / mems.length
+      }));
+      barr.sort((a, b) => a.b - b.b);
+      cols.set(r, barr.flatMap(b => b.mems));
+    }
+    setPos();
+  }
+  function colOf(id) { for (let r = lo; r <= hi; r++) if ((cols.get(r) || []).includes(id)) return r; return null; }
+  setPos();
+  sweep(1); sweep(-1); sweep(1); sweep(-1);
+  // rank per item (orientation-independent)
+  items.forEach((it, id) => { it.rank = colOf(id) == null ? 0 : colOf(id); });
+  const nCards = inside.length + up.length + down.length;
+  // parallel pairs (same unordered endpoints) get bulge separation
+  const pairCnt = new Map(), pairIdx = new Map();
+  lEdges.forEach(g => {
+    const k = [g.a.frame ? 'F' : g.a.id, g.b.frame ? 'F' : g.b.id].sort().join('|');
+    pairCnt.set(k, (pairCnt.get(k) || 0) + 1);
+  });
+  lEdges.forEach(g => {
+    const k = [g.a.frame ? 'F' : g.a.id, g.b.frame ? 'F' : g.b.id].sort().join('|');
+    const pi = pairIdx.get(k) || 0; pairIdx.set(k, pi + 1);
+    g.pOff = (pi - (pairCnt.get(k) - 1) / 2) * 8;
+  });
+
+  function place(horiz) {
+    const cMain = horiz ? CW : CH, cCross = horiz ? CH : CW;
+    const mainStart = new Map();
+    for (let r = 0; r <= maxR; r++) mainStart.set(r, PAD + 30 + r * (cMain + RGAP));
+    const innerMain0 = mainStart.get(0), innerMain1 = mainStart.get(maxR) + cMain;
+    mainStart.set(-1, innerMain0 - 30 - RGAP - cMain);
+    mainStart.set(maxR + 1, innerMain1 + 30 + RGAP);
+    const crossOf = new Map(), crossH = new Map();
+    let maxCross = 0;
+    for (let r = lo; r <= hi; r++) {
+      const c = cols.get(r) || [];
+      let cur = 0;
+      c.forEach(id => {
+        const it = items.get(id);
+        const span = it.dummy ? DSLOT : cCross;
+        crossOf.set(id, cur + span / 2);
+        cur += span + SGAP;
+      });
+      const h = Math.max(0, cur - SGAP);
+      crossH.set(r, h);
+      if (r >= 0 && r <= maxR) maxCross = Math.max(maxCross, h);
+    }
+    const midCross = maxCross / 2;
+    if (up.length) { const h = crossH.get(-1) || 0, off = midCross - h / 2; up.forEach(id => crossOf.set(id, (crossOf.get(id) || 0) + off)); }
+    if (down.length) { const h = crossH.get(maxR + 1) || 0, off = midCross - h / 2; down.forEach(id => crossOf.set(id, (crossOf.get(id) || 0) + off)); }
+    for (let r = 0; r <= maxR; r++) {
+      const off = (maxCross - (crossH.get(r) || 0)) / 2;
+      (cols.get(r) || []).forEach(id => crossOf.set(id, crossOf.get(id) + off));
+    }
+    items.forEach((it, id) => {
+      const m = mainStart.get(it.rank), c = crossOf.get(id) || 0;
+      it.cpos = c;
+      if (it.dummy) { it.x = horiz ? m + cMain / 2 : c; it.y = horiz ? c : m + cMain / 2; it.w = 0; it.h = 0; }
+      else { it.x = horiz ? m : c - CW / 2; it.y = horiz ? c - CH / 2 : m; it.w = CW; it.h = CH; }
+    });
+    let frame = null;
+    if (view) {
+      const cs = inside.map(n => items.get(n.id));
+      const x0 = Math.min(...cs.map(i => i.x)), x1 = Math.max(...cs.map(i => i.x + i.w));
+      const y0 = Math.min(...cs.map(i => i.y)), y1 = Math.max(...cs.map(i => i.y + i.h));
+      frame = { x: x0 - 24, y: y0 - 34, w: x1 - x0 + 44, h: y1 - y0 + 54 };
+    }
+    const lanes = [];
+    const byG = new Map();
+    inside.forEach(n => { if (n.group) { if (!byG.has(n.group)) byG.set(n.group, []); byG.get(n.group).push(n.id); } });
+    byG.forEach((mems, g) => {
+      const cs = mems.map(id => items.get(id));
+      const x0 = Math.min(...cs.map(i => i.x)), x1 = Math.max(...cs.map(i => i.x + i.w));
+      const y0 = Math.min(...cs.map(i => i.y)), y1 = Math.max(...cs.map(i => i.y + i.h));
+      lanes.push({ g, x: x0 - 12, y: y0 - 26, w: x1 - x0 + 24, h: y1 - y0 + 36 });
+    });
+    // ---- ports: side facing the other endpoint, spread over the middle 60% ----
+    const mainC = r => horiz ? r.x + r.w / 2 : r.y + r.h / 2;
+    const crossC = r => horiz ? r.y + r.h / 2 : r.x + r.w / 2;
+    const rectOf = r => r.frame ? frame : items.get(r.id);
+    const sideTo = (r, otherMain) => horiz ? (otherMain < mainC(r) ? 'L' : 'R') : (otherMain < mainC(r) ? 'T' : 'B');
+    const sg = new Map(); // "entity:side" -> [{g, end, oc}]
+    const bump = (k, e) => { if (!sg.has(k)) sg.set(k, []); sg.get(k).push(e); };
+    for (const g of lEdges) {
+      const ra = rectOf(g.a), rb = rectOf(g.b);
+      const sameRank = !g.a.frame && !g.b.frame && items.get(g.a.id).rank === items.get(g.b.id).rank;
+      g.sameRank = sameRank;
+      let sa, sb;
+      if (sameRank) { sa = sb = horiz ? 'R' : 'B'; }
+      else { sa = sideTo(ra, mainC(rb)); sb = sideTo(rb, mainC(ra)); }
+      g.sideA = sa; g.sideB = sb;
+      bump((g.a.frame ? 'F' : g.a.id) + ':' + sa, { g, end: 'a', oc: crossC(rb) });
+      bump((g.b.frame ? 'F' : g.b.id) + ':' + sb, { g, end: 'b', oc: crossC(ra) });
+    }
+    for (const list of sg.values()) {
+      list.sort((x, y) => x.oc - y.oc);
+      list.forEach((c, i) => {
+        const f = list.length === 1 ? .5 : .2 + .6 * i / (list.length - 1);
+        if (c.end === 'a') c.g.fracA = f; else c.g.fracB = f;
+      });
+    }
+    const portAt = (rep, side, f) => {
+      const r = rectOf(rep);
+      if (side === 'L') return { x: r.x, y: r.y + f * r.h };
+      if (side === 'R') return { x: r.x + r.w, y: r.y + f * r.h };
+      if (side === 'T') return { x: r.x + f * r.w, y: r.y };
+      return { x: r.x + f * r.w, y: r.y + r.h };
+    };
+    for (const g of lEdges) {
+      const p0 = portAt(g.a, g.sideA, g.fracA == null ? .5 : g.fracA);
+      const pN = portAt(g.b, g.sideB, g.fracB == null ? .5 : g.fracB);
+      if (g.sameRank) {
+        const ia = items.get(g.a.id), ib = items.get(g.b.id);
+        if (horiz) {
+          const B = Math.max(ia.x, ib.x) + CW + 34 + Math.abs(g.pOff) * 2;
+          g.pts = [p0, { x: B, y: p0.y }, { x: B, y: pN.y }, pN];
+        } else {
+          const B = Math.max(ia.y, ib.y) + CH + 34 + Math.abs(g.pOff) * 2;
+          g.pts = [p0, { x: p0.x, y: B }, { x: pN.x, y: B }, pN];
+        }
+      } else {
+        // channel routing: travel to the mid-channel between ranks, slide
+        // across the empty channel, then enter the next item's band.
+        const seq = (chains.find(c => c.g === g) || {}).seq || [];
+        const cits = seq.map(id => items.get(id)).filter(Boolean);
+        g.pts = [p0];
+        for (let i = 0; i + 1 < cits.length; i++) {
+          const u = cits[i], v = cits[i + 1];
+          const rmin = Math.min(u.rank, v.rank);
+          const mid = mainStart.get(rmin) + cMain + RGAP / 2;
+          const cu = i === 0 ? (horiz ? p0.y : p0.x) : (horiz ? u.y : u.x);
+          const cv = (i === cits.length - 2) ? (horiz ? pN.y : pN.x) : (horiz ? v.y : v.x);
+          if (horiz) g.pts.push({ x: mid, y: cu }, { x: mid, y: cv });
+          else g.pts.push({ x: cu, y: mid }, { x: cv, y: mid });
+        }
+        g.pts.push(pN);
+      }
+    }
+    const xs = [], ys = [];
+    items.forEach(it => { if (!it.dummy) { xs.push(it.x, it.x + it.w); ys.push(it.y, it.y + it.h); } });
+    if (frame) { xs.push(frame.x, frame.x + frame.w); ys.push(frame.y, frame.y + frame.h); }
+    lanes.forEach(l => { xs.push(l.x, l.x + l.w); ys.push(l.y, l.y + l.h); });
+    lEdges.forEach(g => g.pts && g.pts.forEach(pt => { xs.push(pt.x); ys.push(pt.y); }));
+    const bounds = { x: Math.min(...xs) - PAD, y: Math.min(...ys) - PAD, w: Math.max(...xs) - Math.min(...xs) + 2 * PAD, h: Math.max(...ys) - Math.min(...ys) + 2 * PAD };
+    return { frame, lanes, bounds };
+  }
+
+  // orientation: auto = vertical when >8 cards; if the preferred fit scale is
+  // < 0.75 and the other orientation scales better, use the other.
+  const stageW = () => svg.clientWidth || 1100;
+  const stageH = () => (window.innerHeight || 800) * 0.82;
+  const scaleOf = b => Math.min(stageW() / b.w, stageH() / b.h);
+  let o = orientOv || (M.meta.orientation === 'horizontal' ? 'h' : M.meta.orientation === 'vertical' ? 'v' : null);
+  let pl;
+  if (o) pl = place(o === 'h');
+  else {
+    const pref = nCards > 8 ? 'v' : 'h';
+    const p1 = place(pref === 'h');
+    const s1 = scaleOf(p1.bounds);
+    if (s1 < 0.75) {
+      const p2 = place(pref === 'v');
+      if (scaleOf(p2.bounds) > s1) { pl = p2; o = pref === 'v' ? 'h' : 'v'; }
+    }
+    if (!pl) { pl = place(pref === 'h'); o = pref; }
+  }
+  const horiz = o === 'h';
+  return { items, inside, inSet, lEdges, frame: pl.frame, lanes: pl.lanes, bounds: pl.bounds, orient: o, up, down, cols, horiz };
+}
+
+// ---------- render ----------
+const svg = $('svg'), world = $('world');
+function pathD(pts, horiz, arc, sa, sb) {
+  if (arc && pts.length === 4) {
+    const [a, m1, m2, b] = pts;
+    if (horiz) return `M${a.x},${a.y} C${m1.x},${a.y} ${m1.x},${b.y} ${b.x},${b.y}`;
+    return `M${a.x},${a.y} C${a.x},${m1.y} ${b.x},${m2.y} ${b.x},${b.y}`;
+  }
+  // dedupe consecutive equal points
+  pts = pts.filter((p, i) => i === 0 || p.x !== pts[i - 1].x || p.y !== pts[i - 1].y);
+  const DV = { L: [-1, 0], R: [1, 0], T: [0, -1], B: [0, 1] };
+  let d = `M${pts[0].x},${pts[0].y}`;
+  const n = pts.length;
+  for (let i = 1; i < n; i++) {
+    const a = pts[i - 1], b = pts[i];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const k = Math.max(10, Math.max(Math.abs(dx), Math.abs(dy)) * 0.45);
+    let c1, c2;
+    if (i === 1 && sa) c1 = [a.x + DV[sa][0] * k, a.y + DV[sa][1] * k];
+    else c1 = Math.abs(dx) >= Math.abs(dy) ? [a.x + Math.sign(dx || 1) * k, a.y] : [a.x, a.y + Math.sign(dy || 1) * k];
+    if (i === n - 1 && sb) c2 = [b.x + DV[sb][0] * k, b.y + DV[sb][1] * k];
+    else c2 = Math.abs(dx) >= Math.abs(dy) ? [b.x - Math.sign(dx || 1) * k, b.y] : [b.x, b.y - Math.sign(dy || 1) * k];
+    d += ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${b.x},${b.y}`;
+  }
+  return d;
+}
+
+function render() {
+  L = layoutView(view);
+  hoverF = null;
+  world.innerHTML = '';
+  svg.dataset.view = view || 'root';
+  svg.dataset.orient = L.orient === 'h' ? 'horizontal' : 'vertical';
+  svg.classList.toggle('live', live);
+  // background
+  el('rect', { x: L.bounds.x - 400, y: L.bounds.y - 400, width: L.bounds.w + 800, height: L.bounds.h + 800, fill: 'var(--card)', class: 'bg' }, world);
+  // frame
+  if (L.frame) {
+    const g = el('g', { class: 'frameg' + (sel && sel.kind === 'node' && sel.id === view ? ' sel' : '') }, world);
+    el('rect', { x: L.frame.x, y: L.frame.y, width: L.frame.w, height: L.frame.h, rx: 12, fill: 'none', stroke: 'var(--rule)', 'stroke-dasharray': '7 5', 'stroke-width': 1.3 }, g);
+    txt(g, L.frame.x + 14, L.frame.y + 20, tr('inside') + ' ' + (N.get(view).title || view).toUpperCase(), { 'font-family': "'Space Mono',monospace", 'font-size': 8, 'letter-spacing': '0.18em', fill: 'var(--soft)' });
+  }
+  // lanes
+  for (const l of L.lanes) {
+    const g = el('g', { class: 'lane' }, world);
+    el('rect', { x: l.x, y: l.y, width: l.w, height: l.h, rx: 10, fill: 'none', stroke: 'var(--rule)', 'stroke-dasharray': '6 4' }, g);
+    txt(g, l.x + 10, l.y + 14, l.g, { 'font-family': "'Space Mono',monospace", 'font-size': 8, fill: 'var(--soft)' });
+  }
+  // edges (labels and badges get collision-aware placement below)
+  const labQ = [], badgeQ = [];
+  for (const g of L.lEdges) {
+    const ge = el('g', {
+      class: 'ed' + (g.inferred ? ' inf' : '') + (hiddenT.has(g.type) ? ' off' : ''),
+      'data-key': g.key, 'data-type': g.type, 'data-mids': g.members.map(m => m.id).join(','),
+      'data-a': g.a.frame ? '#frame' : g.a.id, 'data-b': g.b.frame ? '#frame' : g.b.id
+    }, world);
+    const d = pathD(g.pts, L.horiz, g.sameRank, g.sideA, g.sideB);
+    el('path', { d, class: 'hit' }, ge);
+    const vis = el('path', { d, class: 'vis', 'marker-end': 'url(#arw)' }, ge);
+    g._vis = vis; g._ge = ge;
+    const sameLab = g.members.every(m => m.label === g.members[0].label);
+    const lab = g.members.length > 1
+      ? (sameLab && g.members[0].label ? g.members[0].label + ' ×' + g.members.length : g.type + ' ×' + g.members.length)
+      : (g.members[0].label || '');
+    if (lab) labQ.push({ t: txt(ge, 0, 0, lab, { class: 'edlab', 'text-anchor': 'middle' }), g });
+    if (g.order != null) badgeQ.push(g);
+    ge.addEventListener('click', ev => { if (moved) return; ev.stopPropagation(); selectEdge(g); });
+    ge.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') setHover(edgeFocus(g)); });
+    ge.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') setHover(null); });
+  }
+  // collision obstacles: cards (inflated 4px), frame label, lane labels
+  const obstacles = [];
+  L.items.forEach(it => { if (!it.dummy) obstacles.push({ x: it.x - 4, y: it.y - 4, w: it.w + 8, h: it.h + 8 }); });
+  const flt = world.querySelector('.frameg text'); if (flt) obstacles.push(flt.getBBox());
+  world.querySelectorAll('.lane text').forEach(t => obstacles.push(t.getBBox()));
+  const hitAny = b => obstacles.some(o => b.x < o.x + o.w && o.x < b.x + b.w && b.y < o.y + o.h && o.y < b.y + b.h);
+  for (const { t, g } of labQ) {
+    const w = t.getComputedTextLength(), len = g._vis.getTotalLength();
+    let done = false;
+    for (const tt of [0.5, 0.4, 0.6, 0.3, 0.7]) {
+      const p = g._vis.getPointAtLength(len * tt);
+      const b = { x: p.x - w / 2 - 4, y: p.y - 17, w: w + 8, h: 14 };
+      if (!hitAny(b)) { t.setAttribute('x', p.x); t.setAttribute('y', p.y - 6); obstacles.push(b); done = true; break; }
+    }
+    if (!done) {
+      const p = g._vis.getPointAtLength(len * .5);
+      t.setAttribute('x', p.x); t.setAttribute('y', p.y - 6);
+      t.classList.add('shy');
+    }
+  }
+  for (const g of badgeQ) {
+    const len = g._vis.getTotalLength();
+    let p = g._vis.getPointAtLength(len * .25), done = false;
+    for (let tt = 0.2; tt <= 0.65; tt += 0.05) {
+      const q = g._vis.getPointAtLength(len * tt);
+      const b = { x: q.x - 9, y: q.y - 9, w: 18, h: 18 };
+      if (!hitAny(b)) { p = q; obstacles.push(b); done = true; break; }
+    }
+    const bg = el('g', { class: 'badge' }, g._ge);
+    el('circle', { cx: p.x, cy: p.y, r: 8 }, bg);
+    txt(bg, p.x, p.y + 3.5, String(g.order), { 'text-anchor': 'middle' });
+  }
+  svg.classList.toggle('many', L.lEdges.length > 8);
+  // nodes
+  L.items.forEach((it, id) => {
+    if (it.dummy) return;
+    const n = it.node;
+    const chip = chipInfo(n);
+    const gn = el('g', {
+      class: 'nd' + (it.proxy ? ' out' : '') + (sel && sel.kind === 'node' && sel.id === id ? ' sel' : ''),
+      id: 'c-' + id, 'data-nid': id, tabindex: '0', role: 'button',
+      'aria-label': (n.title || id) + ', ' + chip.t
+    }, world);
+    const r = el('rect', { x: it.x, y: it.y, width: it.w, height: it.h, rx: 8, fill: 'var(--card)', stroke: borderOf(n), 'stroke-width': n.kind === 'pr' ? 1.6 : 1.3 }, gn);
+    if (it.proxy || n.kind === 'external') { r.setAttribute('stroke-dasharray', '5 4'); if (it.proxy) gn.setAttribute('opacity', '.8'); }
+    txt(gn, it.x + 12, it.y + 16, chip.t, { 'font-family': "'Space Mono',monospace", 'font-size': 8, 'letter-spacing': '0.12em', fill: chip.c });
+    const t = txt(gn, it.x + 12, it.y + 37, n.title || id, { 'font-family': 'Inter,sans-serif', 'font-size': 13, 'font-weight': 600, fill: 'var(--ink)' });
+    shrink(t, it.w - 24);
+    if (n.sub) {
+      const s = txt(gn, it.x + 12, it.y + 53, n.sub, { 'font-family': "'Space Mono',monospace", 'font-size': 9, fill: 'var(--soft)' });
+      shrink(s, it.w - 24);
+    }
+    const nk = childrenOf(id).length;
+    if (nk) txt(gn, it.x + it.w - 12, it.y + it.h - 8, '▸ ' + nk + ' ' + tr('partOf'), { class: 'parts', 'text-anchor': 'end' });
+    gn.addEventListener('click', ev => { if (moved) return; ev.stopPropagation(); clickNode(id); });
+    gn.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); clickNode(id); } });
+    gn.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') setHover(nodeFocus(id)); });
+    gn.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') setHover(null); });
+  });
+  renderCrumbs();
+  renderLegend();
+  $('orientbtn').textContent = L.orient === 'h' ? '⇄' : '⇅';
+  applyHot();
+  fit();
+}
+
+function shrink(t, maxW) {
+  const full = t.textContent;
+  if (t.getComputedTextLength() <= maxW) return;
+  let s = full;
+  while (s.length > 2 && t.getComputedTextLength() > maxW) { s = s.slice(0, -1); t.textContent = s + '…'; }
+}
+
+// ---------- focus / hot ----------
+function nodeFocus(id) {
+  const s = new Set([id]);
+  const isFrame = view && id === view;
+  if (isFrame) { // el contenedor seleccionado ilumina toda su vista
+    s.add('#frame');
+    L.items.forEach((it, iid) => { if (!it.dummy) s.add(iid); });
+    L.lEdges.forEach(g => { if (!hiddenT.has(g.type)) s.add('e:' + g.key); });
+    return s;
+  }
+  for (const g of L.lEdges) {
+    if (hiddenT.has(g.type)) continue;
+    if (!g.a.frame && g.a.id === id) { s.add('e:' + g.key); if (!g.b.frame) s.add(g.b.id); }
+    if (!g.b.frame && g.b.id === id) { s.add('e:' + g.key); if (!g.a.frame) s.add(g.a.id); }
+    if ((g.a.frame || g.b.frame) && ((!g.a.frame && g.a.id === id) || (!g.b.frame && g.b.id === id))) s.add('e:' + g.key);
+  }
+  return s;
+}
+function edgeFocus(g) {
+  const s = new Set(['e:' + g.key]);
+  if (!g.a.frame) s.add(g.a.id);
+  if (!g.b.frame) s.add(g.b.id);
+  return s;
+}
+function selFocus() {
+  if (!sel) return null;
+  if (sel.kind === 'node' && (L.items.has(sel.id) || sel.id === view)) return nodeFocus(sel.id);
+  if (sel.kind === 'edge') { const g = L.lEdges.find(x => x.key === sel.id); if (g) return edgeFocus(g); }
+  return null;
+}
+function setHover(f) { hoverF = f; applyFocus(); }
+function checkFocusSet() {
+  if (!checkRevealed) return null;
+  const s = new Set();
+  for (const fid of checkRevealed.focus || []) {
+    if (L.items.has(fid)) { s.add(fid); continue; }
+    const g = L.lEdges.find(x => x.members.some(m => m.id === fid) || x.key === fid);
+    if (g) s.add('e:' + g.key);
+    if (N.has(fid)) { const r = rep(fid); s.add(r.frame ? '#frame' : r.id); }
+  }
+  return s.size ? s : null;
+}
+function applyFocus() {
+  const f = hoverF || selFocus() || checkFocusSet() || stepFocus();
+  svg.classList.toggle('foc', !!f);
+  world.querySelectorAll('.nd, .ed').forEach(elm => {
+    const id = elm.dataset.nid, key = elm.dataset.key;
+    elm.classList.toggle('hi', !!f && (f.has(id) || f.has('e:' + key)));
+  });
+  const fg = world.querySelector('.frameg');
+  if (fg) fg.classList.toggle('hi', !!f && f.has('#frame'));
+}
+function stepFocus() {
+  if (stepI < 0) return null;
+  const st = M.steps[stepI];
+  if (!st) return null;
+  const s = new Set();
+  for (const fid of st.focus || []) {
+    if (L.items.has(fid)) { s.add(fid); continue; }
+    const g = L.lEdges.find(x => x.members.some(m => m.id === fid) || x.key === fid);
+    if (g) s.add('e:' + g.key);
+    if (N.has(fid)) { // maps to rep card
+      const r = rep(fid);
+      if (r.frame) s.add('#frame'); else s.add(r.id);
+    }
+  }
+  return s.size ? s : null;
+}
+function applyHot() {
+  world.querySelectorAll('.ed').forEach(ge => {
+    const mids = (ge.dataset.mids || '').split(',');
+    let hot = false;
+    if (sel && sel.kind === 'node' && L.items.has(sel.id)) {
+      const g = L.lEdges.find(x => x.key === ge.dataset.key);
+      hot = g && ((g.a.id === sel.id && !g.a.frame) || (g.b.id === sel.id && !g.b.frame));
+    } else if (sel && sel.kind === 'edge') {
+      hot = ge.dataset.key === sel.id;
+    }
+    if (stepI >= 0) {
+      const foc = M.steps[stepI].focus || [];
+      if (mids.some(m => foc.includes(m)) || foc.includes(ge.dataset.key)) hot = true;
+    }
+    if (checkRevealed) {
+      const foc = checkRevealed.focus || [];
+      if (mids.some(m => foc.includes(m)) || foc.includes(ge.dataset.key)) hot = true;
+    }
+    ge.classList.toggle('hot', !!hot);
+    ge.querySelector('.vis').setAttribute('marker-end', hot ? 'url(#arwA)' : 'url(#arw)');
+  });
+  world.querySelectorAll('.nd').forEach(gn => {
+    gn.classList.toggle('sel', sel && sel.kind === 'node' && gn.dataset.nid === sel.id);
+  });
+  applyFocus();
+}
+
+// ---------- camera ----------
+function setVB(b, ms) {
+  const from = vb ? { ...vb } : b;
+  vb = b;
+  const apply = v => { vb = v; applyVB(); };
+  if (!ms || RM) { apply(b); return; }
+  const t0 = performance.now();
+  (function tick(t) {
+    const k = Math.min(1, (t - t0) / ms), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    apply({ x: from.x + (b.x - from.x) * e, y: from.y + (b.y - from.y) * e, w: from.w + (b.w - from.w) * e, h: from.h + (b.h - from.h) * e });
+    if (k < 1) requestAnimationFrame(tick);
+  })(t0);
+}
+function fit(ms) {
+  const b = L.bounds;
+  const s = Math.min((svg.clientWidth || 1100) / b.w, (window.innerHeight * 0.82 || 656) / b.h);
+  let w = b.w, h = b.h;
+  if (s > 1.15) { const k = s / 1.15; w = b.w * k; h = b.h * k; }
+  fitBox = { x: b.x + b.w / 2 - w / 2, y: b.y + b.h / 2 - h / 2, w, h };
+  setVB(fitBox, ms || 0);
+}
+function fitFocus(ids, ms) {
+  const xs = [], ys = [];
+  ids.forEach(id => {
+    const it = L.items.get(id);
+    if (it && !it.dummy) { xs.push(it.x, it.x + it.w); ys.push(it.y, it.y + it.h); }
+  });
+  L.lEdges.forEach(g => { if (ids.includes('e:' + g.key) || g.members.some(m => ids.includes(m.id))) { g.pts.forEach(p => { xs.push(p.x); ys.push(p.y); }); } });
+  if (!xs.length) return fit(ms);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  let w = Math.max(...xs) - Math.min(...xs) + 120, h = Math.max(...ys) - Math.min(...ys) + 120;
+  // zoom clamp 1..1.6 vs fit
+  const fw = fitBox ? fitBox.w : L.bounds.w;
+  if (w >= fw) return fit(ms);
+  const minW = fw / 1.6;
+  if (w < minW) { const k = minW / w; w = minW; h = h * k; }
+  setVB({ x: cx - w / 2, y: cy - h / 2, w, h }, ms || 0);
+}
+function vbPoint(e) {
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return { x: vb.x, y: vb.y };
+  return new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+}
+
+// ---------- pan / zoom ----------
+const ptrs = new Map();
+let moved = false, panOK = false, pinched = false;
+const tapPx = e => e.pointerType === 'touch' ? 8 : 4;
+function zoomScale() { return (fitBox ? fitBox.w : vb.w) / vb.w; }
+function applyVB() {
+  svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  svg.dataset.zoom = zoomScale().toFixed(3);
+}
+svg.addEventListener('pointerdown', e => {
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 1) {
+    moved = false;
+    panOK = !(e.target.closest('.nd') || e.target.closest('.ed'));
+  }
+  if (ptrs.size === 2) pinched = true;
+  // capture only when the gesture can move the canvas, so card taps keep their click
+  if (panOK || pinched) { try { svg.setPointerCapture(e.pointerId); } catch {} }
+});
+svg.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) return;
+  const prev = ptrs.get(e.pointerId);
+  if (Math.abs(e.clientX - prev.x) + Math.abs(e.clientY - prev.y) > tapPx(e)) moved = true;
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 2) {
+    // pinch: zoom around the midpoint plus pan by the midpoint delta
+    const o = [...ptrs.entries()].find(([id]) => id !== e.pointerId)[1];
+    const mid = { x: (e.clientX + o.x) / 2, y: (e.clientY + o.y) / 2 };
+    const pmid = { x: (prev.x + o.x) / 2, y: (prev.y + o.y) / 2 };
+    const d = Math.hypot(e.clientX - o.x, e.clientY - o.y);
+    const pd = Math.hypot(prev.x - o.x, prev.y - o.y) || d;
+    const ctm = svg.getScreenCTM();
+    const k = ctm ? 1 / ctm.a : vb.w / svg.clientWidth;
+    const p = ctm ? new DOMPoint(mid.x, mid.y).matrixTransform(ctm.inverse()) : { x: vb.x + vb.w / 2, y: vb.y + vb.h / 2 };
+    vb = { x: vb.x - (mid.x - pmid.x) * k, y: vb.y - (mid.y - pmid.y) * k, w: vb.w, h: vb.h };
+    p.x -= (mid.x - pmid.x) * k; p.y -= (mid.y - pmid.y) * k;
+    const scale = Math.min(3, Math.max(.3, zoomScale() * (d / pd)));
+    const r = ((fitBox ? fitBox.w : vb.w) / scale) / vb.w;
+    vb = { x: p.x - (p.x - vb.x) * r, y: p.y - (p.y - vb.y) * r, w: vb.w * r, h: vb.h * r };
+    applyVB();
+    return;
+  }
+  if (ptrs.size === 1 && (panOK || pinched)) {
+    const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+    const ctm = svg.getScreenCTM();
+    const kx = ctm ? 1 / ctm.a : vb.w / svg.clientWidth, ky = ctm ? 1 / ctm.d : vb.h / svg.clientHeight;
+    vb = { x: vb.x - dx * kx, y: vb.y - dy * ky, w: vb.w, h: vb.h };
+    applyVB();
+  }
+});
+const ptrEnd = e => { ptrs.delete(e.pointerId); if (!ptrs.size) { pinched = false; panOK = false; setTimeout(() => moved = false, 0); } };
+svg.addEventListener('pointerup', ptrEnd);
+svg.addEventListener('pointercancel', ptrEnd);
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const k = e.deltaY < 0 ? 1.12 : 0.9;
+  const p = vbPoint(e);
+  const scale = Math.min(3, Math.max(.3, zoomScale() * k));
+  const target = (fitBox ? fitBox.w : vb.w) / scale;
+  const r = target / vb.w;
+  vb = { x: p.x - (p.x - vb.x) * r, y: p.y - (p.y - vb.y) * r, w: vb.w * r, h: vb.h * r };
+  applyVB();
+}, { passive: false });
+svg.addEventListener('click', e => {
+  if (moved) return;
+  if (!e.target.closest('.nd') && !e.target.closest('.ed')) clearSel();
+});
+
+// ---------- navigation ----------
+function exitWalk() {
+  stepI = -1; stopTimer();
+  $('sname').textContent = '';
+  [...$('dots').children].forEach(d => d.classList.remove('on'));
+}
+
+function openView(id, ms) {
+  view = id;
+  exitWalk();
+  sel = null;
+  render();
+  showPassport();
+  if (ms) setVB(fitBox, ms);
+  updateHash();
+}
+function clickNode(id) {
+  exitWalk(); checkRevealed = null;
+  if (hasKids(id)) { sel = { kind: 'node', id }; view = id; render(); }
+  else sel = { kind: 'node', id };
+  applyHot(); showPassport(); updateHash();
+}
+function selectEdge(g) {
+  exitWalk(); checkRevealed = null;
+  sel = { kind: 'edge', id: g.key }; applyHot(); showPassport(); updateHash();
+}
+function clearSel() { sel = null; checkRevealed = null; exitWalk(); applyHot(); showPassport(); updateHash(); }
+function goUp() { if (!view) return; openView(N.get(view).parent || null); }
+function navTo(id) {
+  if (!N.has(id)) return;
+  if (hasKids(id)) { sel = { kind: 'node', id }; view = id; render(); }
+  else {
+    view = N.get(id).parent || null;
+    sel = { kind: 'node', id };
+    render();
+    // center camera on it
+    const it = L.items.get(id);
+    if (it) {
+      const w = vb.w, h = vb.h;
+      setVB({ x: it.x + it.w / 2 - w / 2, y: it.y + it.h / 2 - h / 2, w, h }, 300);
+    }
+  }
+  exitWalk();
+  applyHot(); showPassport(); updateHash();
+}
+
+// ---------- breadcrumb ----------
+function renderCrumbs() {
+  const c = $('crumbs'); c.innerHTML = '';
+  const parts = [{ id: null, t: M.meta.rootLabel }];
+  const chain = []; for (let x = view; x; x = N.get(x).parent) chain.unshift(x);
+  chain.forEach(x => parts.push({ id: x, t: N.get(x).title || x }));
+  parts.forEach((p, i) => {
+    if (i) { const s = document.createElement('span'); s.className = 'crumbsep'; s.textContent = '›'; c.appendChild(s); }
+    const a = document.createElement('span');
+    a.className = 'crumb' + (i === parts.length - 1 ? ' cur' : '');
+    a.textContent = p.t;
+    if (i < parts.length - 1) a.onclick = () => openView(p.id);
+    c.appendChild(a);
+  });
+}
+
+// ---------- legend ----------
+function renderLegend() {
+  const lg = $('legend'); lg.innerHTML = '';
+  const types = new Map();
+  L.lEdges.forEach(g => types.set(g.type, (types.get(g.type) || 0) + 1));
+  if (types.size) {
+    const s = document.createElement('span'); s.textContent = tr('conns'); lg.appendChild(s);
+    for (const [t, n] of types) {
+      const b = document.createElement('button');
+      b.className = 'lchip'; b.dataset.type = t;
+      b.setAttribute('aria-pressed', String(!hiddenT.has(t)));
+      b.textContent = t + ' ' + n;
+      b.onclick = () => { hiddenT.has(t) ? hiddenT.delete(t) : hiddenT.add(t); render(); applyHot(); };
+      lg.appendChild(b);
+    }
+  }
+  const sts = new Map();
+  L.items.forEach(it => {
+    if (it.dummy) return;
+    const n = it.node;
+    const key = n.kind === 'pr' ? 'pr' : n.kind === 'external' ? 'external' : (n.status || 'context');
+    sts.set(key, chipInfo(n));
+  });
+  if (sts.size) {
+    const sep = document.createElement('span'); sep.style.marginLeft = '8px'; lg.appendChild(sep);
+    for (const [k, v] of sts) {
+      const d = document.createElement('span');
+      d.className = 'sdot'; d.title = v.t;
+      d.style.background = v.c;
+      if (k === 'external') { d.style.background = 'transparent'; d.style.border = '1px dashed var(--soft)'; }
+      lg.appendChild(d);
+    }
+  }
+}
+
+// ---------- passport ----------
+const narrow = () => matchMedia('(max-width:760px)').matches;
+function syncSheet() {
+  const P = $('passport');
+  const open = narrow() && !!(sel || stepI >= 0 || checkRevealed);
+  if (open && !P.classList.contains('open')) P.classList.add('peek');
+  P.classList.toggle('open', open);
+  if (!open) P.classList.remove('peek');
+}
+function showPassport() {
+  const P = $('passport'); P.innerHTML = '';
+  const drag = document.createElement('div'); drag.className = 'pdrag';
+  drag.onclick = () => P.classList.toggle('peek'); P.appendChild(drag);
+  const px = document.createElement('button'); px.className = 'px';
+  px.textContent = '✕'; px.setAttribute('aria-label', tr('close')); px.dataset.act = 'close-sheet';
+  px.onclick = () => clearSel(); P.appendChild(px);
+  if (checkRevealed) { checkPassport(checkRevealed); syncSheet(); return; }
+  if (stepI >= 0 && !sel) { stepPassport(); syncSheet(); return; }
+  if (!sel) { defaultPassport(); syncSheet(); return; }
+  if (sel.kind === 'edge') {
+    const g = L.lEdges.find(x => x.key === sel.id);
+    if (!g) { defaultPassport(); syncSheet(); return; }
+    edgePassport(g); syncSheet(); return;
+  }
+  nodePassport(sel.id); syncSheet();
+}
+function chipsRow(P, n) {
+  const d = document.createElement('div'); d.className = 'chips';
+  const k = document.createElement('span'); k.className = 'kchip'; k.textContent = KIND_LABEL[n.kind] || n.kind; d.appendChild(k);
+  if (n.status && n.kind !== 'context') {
+    const s = document.createElement('span'); s.className = 'kchip st-' + n.status;
+    s.textContent = ST_LABEL[n.status] || n.status;
+    d.appendChild(s);
+  }
+  P.appendChild(d);
+}
+function nodePassport(id) {
+  const P = $('passport'), n = N.get(id);
+  chipsRow(P, n);
+  const t = document.createElement('div'); t.className = 't'; t.textContent = n.title || id; P.appendChild(t);
+  const pid = document.createElement('div'); pid.className = 'pid'; pid.textContent = id; P.appendChild(pid);
+  const b = document.createElement('div'); b.className = 'b'; b.innerHTML = md(n.summary); P.appendChild(b);
+  if (n.sources && n.sources.length) {
+    const h = document.createElement('h3'); h.textContent = tr('srcs'); P.appendChild(h);
+    const ul = document.createElement('ul'); ul.className = 'src';
+    n.sources.forEach(s => { const li = document.createElement('li'); li.textContent = s; ul.appendChild(li); });
+    P.appendChild(ul);
+  }
+  const kx = childrenOf(id);
+  if (kx.length) {
+    const h = document.createElement('h3'); h.textContent = tr('partsH') + ' (' + kx.length + ')'; P.appendChild(h);
+    kx.forEach(c => {
+      const p = document.createElement('span'); p.className = 'pill'; p.textContent = c.title || c.id;
+      p.onclick = () => navTo(c.id); P.appendChild(p);
+    });
+  }
+  // relations (model-level, via descendants)
+  const D = descSet(id);
+  const inc = [], out = [];
+  for (const e of M.edges) {
+    const aIn = D.has(e.from), bIn = D.has(e.to);
+    if (aIn && !bIn) out.push({ e, via: e.from !== id ? e.from : null, other: e.to, dir: 'out' });
+    else if (bIn && !aIn) inc.push({ e, via: e.to !== id ? e.to : null, other: e.from, dir: 'in' });
+  }
+  const relSection = (title, rows, dir) => {
+    if (!rows.length) return;
+    const h = document.createElement('h3'); h.textContent = title + ' (' + rows.length + ')'; P.appendChild(h);
+    rows.forEach(r => {
+      const det = document.createElement('details'); det.className = 'rel';
+      const sm = document.createElement('summary');
+      const ar = document.createElement('span'); ar.className = 'arrow';
+      ar.textContent = dir === 'out' ? '→ ' : '← ';
+      sm.appendChild(ar);
+      const rt = document.createElement('span'); rt.className = 'rt'; rt.textContent = r.e.type + (dir === 'out' ? ' → ' : ' ← ');
+      sm.appendChild(rt);
+      const go = document.createElement('a'); go.className = 'goto'; go.textContent = (N.get(r.other) || {}).title || r.other;
+      go.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); navTo(r.other); };
+      sm.appendChild(go);
+      if (r.via) { const v = document.createElement('span'); v.className = 'via'; v.textContent = tr('via') + ((N.get(r.via) || {}).title || r.via); sm.appendChild(v); }
+      det.appendChild(sm);
+      const rd = document.createElement('div'); rd.className = 'rd';
+      rd.innerHTML = md(r.e.summary || '');
+      if (r.e.payload) { const p = document.createElement('div'); p.className = 'mono'; p.textContent = r.e.payload; rd.appendChild(p); }
+      if (r.e.source) { const s = document.createElement('div'); s.className = 'mono'; s.textContent = r.e.source; rd.appendChild(s); }
+      det.appendChild(rd);
+      P.appendChild(det);
+    });
+  };
+  relSection(tr('incH'), inc, 'in');
+  relSection(tr('outH'), out, 'out');
+  if (n.hunk) hunkBlock(P, n);
+  copyBtn(P);
+}
+function edgePassport(g) {
+  const P = $('passport');
+  const d = document.createElement('div'); d.className = 'chips';
+  const k = document.createElement('span'); k.className = 'kchip'; k.textContent = g.type; d.appendChild(k);
+  if (g.order != null) { const o = document.createElement('span'); o.className = 'kchip st-pr'; o.textContent = tr('order') + g.order; d.appendChild(o); }
+  if (g.inferred) { const i = document.createElement('span'); i.className = 'kchip'; i.textContent = tr('inferred'); d.appendChild(i); }
+  P.appendChild(d);
+  const t = document.createElement('div'); t.className = 't';
+  const aT = g.a.frame ? (N.get(view).title || view) : (N.get(g.a.id) || {}).title || g.a.id;
+  const bT = g.b.frame ? (N.get(view).title || view) : (N.get(g.b.id) || {}).title || g.b.id;
+  t.textContent = aT + ' → ' + bT; P.appendChild(t);
+  if (g.members.length > 1) {
+    const h = document.createElement('h3'); h.textContent = tr('edgesH') + ' (' + g.members.length + ')'; P.appendChild(h);
+    g.members.forEach(m => memberEdge(P, m));
+  } else memberEdge(P, g.members[0]);
+  copyBtn(P);
+}
+function memberEdge(P, m) {
+  const det = document.createElement('details'); det.className = 'rel';
+  const sm = document.createElement('summary');
+  const mk = (nid) => {
+    const a = document.createElement('a'); a.className = 'goto'; a.textContent = (N.get(nid) || {}).title || nid;
+    a.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); navTo(nid); };
+    return a;
+  };
+  sm.appendChild(mk(m.from));
+  const ar = document.createElement('span'); ar.className = 'rt'; ar.textContent = ' → ' + m.type + ' → '; sm.appendChild(ar);
+  sm.appendChild(mk(m.to));
+  det.appendChild(sm);
+  const rd = document.createElement('div'); rd.className = 'rd';
+  rd.innerHTML = md(m.summary || '');
+  if (m.payload) { const p = document.createElement('div'); p.className = 'mono'; p.textContent = m.payload; rd.appendChild(p); }
+  if (m.source) { const s = document.createElement('div'); s.className = 'mono'; s.textContent = m.source; rd.appendChild(s); }
+  det.appendChild(rd);
+  P.appendChild(det);
+}
+function hunkBlock(P, n) {
+  const h = document.createElement('h3'); h.textContent = 'DIFF'; P.appendChild(h);
+  if (n.hunkTitle) { const k = document.createElement('div'); k.className = 'hk'; k.textContent = n.hunkTitle; P.appendChild(k); }
+  const pre = document.createElement('pre'); pre.className = 'hunk';
+  String(n.hunk).split('\n').forEach(l => {
+    const s = document.createElement('span');
+    s.className = 'hl' + (l.startsWith('+') ? ' hadd' : l.startsWith('-') ? ' hdel' : '');
+    s.textContent = l || ' ';
+    pre.appendChild(s);
+  });
+  P.appendChild(pre);
+}
+function copyBtn(P) {
+  const b = document.createElement('button'); b.id = 'copylink'; b.textContent = tr('copyLink');
+  b.dataset.act = 'copy-link';
+  b.onclick = () => {
+    const done = () => { b.textContent = tr('copied'); setTimeout(() => b.textContent = tr('copyLink'), 1200); };
+    if (navigator.clipboard) navigator.clipboard.writeText(location.href).then(done, done);
+    else done();
+  };
+  P.appendChild(b);
+}
+function defaultPassport() {
+  const P = $('passport');
+  const t = document.createElement('div'); t.className = 't';
+  t.textContent = tr('phT'); P.appendChild(t);
+  const b = document.createElement('div'); b.className = 'b';
+  b.textContent = tr('phB');
+  P.appendChild(b);
+}
+function stepPassport() {
+  const P = $('passport'), st = M.steps[stepI];
+  const t = document.createElement('div'); t.className = 't';
+  t.textContent = (stepI + 1) + '/' + M.steps.length + ' · ' + st.title; P.appendChild(t);
+  const b = document.createElement('div'); b.className = 'b stepbody'; b.innerHTML = md(st.body); P.appendChild(b);
+  if (st.hunkFrom && N.get(st.hunkFrom) && N.get(st.hunkFrom).hunk) hunkBlock(P, N.get(st.hunkFrom));
+}
+
+// ---------- walkthrough ----------
+const dots = $('dots');
+M.steps.forEach((_, i) => {
+  const d = document.createElement('div'); d.className = 'dot'; d.dataset.i = i;
+  d.onclick = () => { stopTimer(); showStep(i); };
+  dots.appendChild(d);
+});
+function showStep(i) {
+  stepI = i; sel = null;
+  const st = M.steps[i];
+  const needView = st.view || null;
+  if (needView !== view) { view = needView; sel = null; render(); }
+  applyHot();
+  $('sname').textContent = (i + 1) + '/' + M.steps.length + ' · ' + st.title;
+  [...dots.children].forEach((d, k) => d.classList.toggle('on', k === i));
+  showPassport();
+  const foc = st.focus || [];
+  const cardIds = foc.filter(f => L.items.has(f));
+  const edgeIds = foc.filter(f => !L.items.has(f));
+  const all = cardIds.concat(edgeIds.map(f => 'e:' + f));
+  const extra = [];
+  foc.forEach(f => { if (N.has(f) && !L.items.has(f)) { const r = rep(f); if (!r.frame) extra.push(r.id); } });
+  fitFocus(cardIds.concat(extra).concat(foc), 350);
+  updateHash();
+}
+function stopTimer() {
+  if (timer) { clearInterval(timer); timer = null; }
+  $('play').textContent = tr('play');
+}
+$('next').onclick = () => { stopTimer(); showStep(stepI + 1 < M.steps.length ? stepI + 1 : 0); };
+$('prev').onclick = () => { stopTimer(); showStep(stepI - 1 < 0 ? M.steps.length - 1 : stepI - 1); };
+$('play').onclick = () => {
+  if (timer) return stopTimer();
+  showStep(stepI + 1 < M.steps.length ? stepI + 1 : 0);
+  timer = setInterval(() => { if (stepI >= M.steps.length - 1) return stopTimer(); showStep(stepI + 1); }, 2600);
+  $('play').textContent = tr('pause');
+};
+$('live').onclick = () => {
+  live = !live;
+  $('live').textContent = live ? 'Live' : 'Still';
+  $('live').setAttribute('aria-pressed', String(live));
+  svg.classList.toggle('live', live);
+};
+$('live').textContent = live ? 'Live' : 'Still';
+$('live').setAttribute('aria-pressed', String(live));
+$('orientbtn').onclick = () => {
+  orientOv = L.orient === 'h' ? 'v' : 'h';
+  $('orientbtn').textContent = orientOv === 'h' ? '⇄' : '⇅';
+  render(); applyHot();
+};
+$('fit').onclick = () => fit(200);
+
+// ---------- search ----------
+const sIn = $('search'), sRes = $('sres');
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+let sIdx = -1, sList = [];
+function doSearch() {
+  const q = norm(sIn.value.trim());
+  sRes.innerHTML = ''; sList = []; sIdx = -1;
+  if (!q) { sRes.classList.remove('open'); return; }
+  sList = M.nodes.filter(n => norm(n.title + ' ' + n.id + ' ' + (n.sub || '') + ' ' + (n.sources || []).join(' ')).includes(q)).slice(0, 8);
+  sList.forEach((n, i) => {
+    const d = document.createElement('div'); d.className = 'sr-item'; d.dataset.i = i;
+    const tt = document.createElement('div'); tt.textContent = n.title || n.id; d.appendChild(tt);
+    const p = document.createElement('div'); p.className = 'p'; p.textContent = n.id; d.appendChild(p);
+    d.onclick = () => { closeSearch(); navTo(n.id); };
+    sRes.appendChild(d);
+  });
+  if (sList.length) sRes.classList.add('open');
+}
+function closeSearch() { sRes.classList.remove('open'); sIn.value = ''; sIdx = -1; sIn.blur(); }
+sIn.addEventListener('input', doSearch);
+sIn.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!sList.length) return;
+    sIdx = (sIdx + (e.key === 'ArrowDown' ? 1 : -1) + sList.length) % sList.length;
+    [...sRes.children].forEach((d, i) => d.classList.toggle('on', i === sIdx));
+  } else if (e.key === 'Enter') {
+    const n = sList[sIdx >= 0 ? sIdx : 0];
+    if (n) { closeSearch(); navTo(n.id); }
+  } else if (e.key === 'Escape') { closeSearch(); }
+});
+
+// ---------- keys ----------
+document.addEventListener('keydown', e => {
+  if (e.target === sIn) return;
+  if (e.key === '/') { e.preventDefault(); sIn.focus(); return; }
+  if (e.key === 'Escape') {
+    if (sRes.classList.contains('open')) return closeSearch();
+    if (sel) return clearSel();
+    if (checkRevealed) { checkRevealed = null; applyHot(); showPassport(); return; }
+    if (stepI >= 0) return exitWalk();
+    return goUp();
+  }
+  if (e.key === 'ArrowRight') { stopTimer(); showStep(stepI + 1 < M.steps.length ? stepI + 1 : 0); }
+  if (e.key === 'ArrowLeft') { stopTimer(); showStep(stepI - 1 < 0 ? M.steps.length - 1 : stepI - 1); }
+  if (e.key === ' ') { e.preventDefault(); $('play').click(); }
+  if (e.key === 'f' || e.key === 'F') fit(200);
+});
+
+// ---------- checks ----------
+const checks = M.checks || [];
+const CHK_KEY = 'legibify-check:' + M.meta.id;
+let checkI = 0, checkRes = [];
+try {
+  const saved = JSON.parse(localStorage.getItem(CHK_KEY) || 'null');
+  if (saved && Array.isArray(saved.res)) { checkRes = saved.res; checkI = Math.min(saved.idx || 0, checks.length); }
+} catch {}
+function saveChecks() { try { localStorage.setItem(CHK_KEY, JSON.stringify({ res: checkRes, idx: checkI })); } catch {} }
+const slug = String(M.meta.id).toLowerCase().replace(/[^a-z0-9-]/g, '-');
+const commitTag = M.meta.commit ? ' @ ' + M.meta.commit : '';
+function ankiCards() {
+  const esc = v => String(v).replace(/\t/g, ' ').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const back = c => esc(c.a + ' \u00b7 ' + tr('srcLabel') + ' ' + c.source + commitTag).replace(/\n/g, '<br>');
+  return ['#separator:tab', '#html:true', '#tags column:3', '#deck:legibify::' + slug]
+    .concat(checks.filter((c, i) => !checkRes[i]).map(c => esc(c.q) + '\t' + back(c) + '\tlegibify ' + slug))
+    .join('\n') + '\n';
+}
+function obsidianCards() {
+  return '#flashcards/legibify/' + slug + '\n\n' + checks.map(c =>
+    c.q + '\n?\n' + c.a + '\n' + tr('srcLabel') + ' ' + c.source + commitTag
+  ).join('\n\n') + '\n';
+}
+function hypatiaCards() {
+  return checks.map(c =>
+    '  {\n   "front": ' + JSON.stringify(c.q) + ',\n   "back": ' +
+    JSON.stringify(c.a + ' \u00b7 ' + tr('srcLabel') + ' ' + c.source + commitTag) + '\n  }'
+  ).join(',\n') + '\n';
+}
+function copyText(text, btn, holder) {
+  const done = () => { btn.textContent = tr('copied'); setTimeout(() => btn.textContent = btn.dataset.label, 1200); };
+  const fallback = () => {
+    holder.innerHTML = '';
+    const ta = document.createElement('textarea'); ta.readOnly = true; ta.value = text;
+    holder.appendChild(ta); ta.focus(); ta.select();
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+  else fallback();
+}
+function checkPassport(c) {
+  const P = $('passport');
+  const k = document.createElement('div'); k.className = 'chips';
+  const chip = document.createElement('span'); chip.className = 'kchip st-pr'; chip.textContent = tr('checkChip'); k.appendChild(chip); P.appendChild(k);
+  const t = document.createElement('div'); t.className = 't'; t.textContent = c.q; P.appendChild(t);
+  const b = document.createElement('div'); b.className = 'b'; b.innerHTML = md(c.a); P.appendChild(b);
+  const src = document.createElement('div'); src.className = 'pid'; src.textContent = c.source; P.appendChild(src);
+  const btns = document.createElement('div'); btns.className = 'cbtns';
+  [[tr('knew'), true, 'knew'], [tr('missed'), false, 'missed']].forEach(([label, v, act]) => {
+    const bt = document.createElement('button'); bt.textContent = label; bt.dataset.act = act;
+    bt.onclick = () => answerCheck(v);
+    btns.appendChild(bt);
+  });
+  P.appendChild(btns);
+}
+function revealCheck(i) {
+  const c = checks[i];
+  checkRevealed = c; sel = null;
+  const nv = c.view || null;
+  if (nv !== view) { view = nv; render(); }
+  applyHot(); showPassport();
+  const extra = [];
+  (c.focus || []).forEach(f => { if (N.has(f) && !L.items.has(f)) { const r = rep(f); if (!r.frame) extra.push(r.id); } });
+  fitFocus((c.focus || []).concat(extra), 350);
+  if (narrow()) document.querySelector('.stage').scrollIntoView({ block: 'start' });
+  updateHash();
+}
+function answerCheck(v) {
+  checkRes[checkI] = v;
+  checkRevealed = null;
+  checkI = Math.min(checkI + 1, checks.length);
+  saveChecks();
+  applyHot(); showPassport(); renderCheckCard();
+}
+function renderCheckCard() {
+  const card = $('checkcard'), body = $('checkbody');
+  if (!checks.length) { card.hidden = true; return; }
+  card.hidden = false;
+  body.innerHTML = '';
+  if (checkI >= checks.length) {
+    const known = checkRes.filter(Boolean).length, missed = checks.length - known;
+    const k = document.createElement('div'); k.className = 'ck'; k.textContent = tr('done'); body.appendChild(k);
+    const q = document.createElement('p'); q.className = 'cq';
+    q.textContent = tr('knewN', { k: known, n: checks.length });
+    body.appendChild(q);
+    if (missed) {
+      const h = document.createElement('div'); h.className = 'ck'; h.textContent = tr('cardsReview', { m: missed }); body.appendChild(h);
+      const ul = document.createElement('ul'); ul.className = 'missed';
+      checks.forEach((c, i) => { if (!checkRes[i]) { const li = document.createElement('li'); li.textContent = c.q; ul.appendChild(li); } });
+      body.appendChild(ul);
+    }
+    const row = document.createElement('div'); row.className = 'cbtns';
+    const rb = document.createElement('button'); rb.textContent = tr('repeat'); rb.dataset.act = 'repeat';
+    rb.onclick = () => { checkI = 0; checkRes = []; saveChecks(); renderCheckCard(); };
+    row.appendChild(rb);
+    const holder = document.createElement('div'); holder.style.width = '100%';
+    [[tr('copyAnki'), ankiCards, 'copy-anki'], [tr('copyObsidian'), obsidianCards, 'copy-obsidian'], [tr('copyHypatia'), hypatiaCards, 'copy-hypatia']].forEach(([label, fn, act]) => {
+      const b = document.createElement('button'); b.textContent = label; b.dataset.label = label; b.dataset.act = act;
+      b.onclick = () => copyText(fn(), b, holder);
+      row.appendChild(b);
+    });
+    body.appendChild(row); body.appendChild(holder);
+    return;
+  }
+  const k = document.createElement('div'); k.className = 'ck'; k.textContent = (checkI + 1) + '/' + checks.length; body.appendChild(k);
+  const q = document.createElement('p'); q.className = 'cq'; q.innerHTML = md(checks[checkI].q); body.appendChild(q);
+  const rv = document.createElement('button'); rv.textContent = tr('reveal'); rv.dataset.act = 'reveal';
+  rv.onclick = () => revealCheck(checkI);
+  body.appendChild(rv);
+}
+renderCheckCard();
+
+// ---------- hash ----------
+function updateHash() {
+  const p = [];
+  if (view) p.push('v=' + view);
+  if (sel && sel.kind === 'node') p.push('n=' + sel.id);
+  if (stepI >= 0) p.push('s=' + (stepI + 1));
+  history.replaceState(null, '', location.pathname + location.search + (p.length ? '#' + p.join('&') : ''));
+}
+function applyHash() {
+  const h = location.hash.slice(1);
+  const kv = {};
+  h.split('&').forEach(x => { const i = x.indexOf('='); if (i > 0) kv[x.slice(0, i)] = x.slice(i + 1); });
+  if (kv.n && N.has(kv.n)) { navTo(kv.n); return; }
+  if (kv.v && N.has(kv.v) && hasKids(kv.v)) { openView(kv.v); }
+  if (kv.s) { const k = parseInt(kv.s, 10); if (k >= 1 && k <= M.steps.length) showStep(k - 1); }
+}
+
+// ---------- sidebar ----------
+(function sidebar() {
+  const sb = M.sidebar;
+  $('eyebrow').textContent = M.meta.eyebrow || '';
+  $('title').textContent = M.meta.title || M.meta.id;
+  document.title = 'legibify · ' + M.meta.id;
+  $('v-what').innerHTML = md(sb.verdict.what);
+  $('v-why').innerHTML = md(sb.verdict.why);
+  $('v-risk').innerHTML = md(sb.verdict.risk);
+  const oh = $('obshyp');
+  (sb.observation || []).forEach(o => { const d = document.createElement('div'); d.className = 'obs'; d.innerHTML = '<b>' + tr('obs') + '</b><br>' + md(o); oh.appendChild(d); });
+  (sb.hypothesis || []).forEach(o => { const d = document.createElement('div'); d.className = 'hyp'; d.innerHTML = '<b>' + tr('hyp') + '</b><br>' + md(o); oh.appendChild(d); });
+  const ul = $('verify');
+  if ((sb.verify || []).length) {
+    const h = document.createElement('h3'); h.className = 'vhead'; h.textContent = tr('verifyHead');
+    ul.parentNode.insertBefore(h, ul);
+    sb.verify.forEach(v => { const li = document.createElement('li'); li.innerHTML = md(v); ul.appendChild(li); });
+  }
+  $('prbody').textContent = sb.prBody || '';
+})();
+
+// ---------- theme ----------
+$('themebtn').onclick = () => {
+  document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? '' : 'dark';
+};
+if (new URLSearchParams(location.search).get('theme') === 'light') document.documentElement.dataset.theme = '';
+if (matchMedia('(pointer: coarse)').matches) $('hintfine').textContent = tr('hintCoarse');
+
+// ---------- boot ----------
+render();
+showPassport();
+applyHash();
+window.addEventListener('resize', () => fit(0));
+</script>
+</body>
+</html>
