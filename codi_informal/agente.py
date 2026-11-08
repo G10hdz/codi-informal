@@ -52,6 +52,8 @@ _LIBRETA = re.compile(
     re.IGNORECASE,
 )
 _QR = re.compile(r"\bqr\b", re.IGNORECASE)
+# CDMX no tiene horario de verano desde 2022; el contenedor corre en UTC
+_MX = timezone(timedelta(hours=-6))
 
 AVISO_DINERO = "La prueba mueve dinero real y no se devuelve."
 CONCEPTO = "Cobro del puesto"
@@ -72,7 +74,7 @@ class Agente:
         self.max_cents = tope_centavos(max_amount)  # None: cobros deshabilitados
         self.cobros_activos = cobros_activos
         self.confirmaciones = Confirmaciones(reloj)
-        self.fecha = fecha or datetime.now
+        self.fecha = fecha or (lambda: datetime.now(_MX))
 
     def responder(self, texto: str, dueno: str = "local", chat: str = "local") -> Resultado:
         limpio = " ".join((texto or "").split())
@@ -298,7 +300,7 @@ def _desde(semana: bool, fecha) -> str:
 
 def _hora(created_at: str) -> str:
     try:
-        return datetime.fromisoformat(created_at).astimezone().strftime("%H:%M")
+        return datetime.fromisoformat(created_at).astimezone(_MX).strftime("%H:%M")
     except (ValueError, TypeError):
         return ""
 
