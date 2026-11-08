@@ -1,6 +1,6 @@
 # Varísimo
 
-Bot de WhatsApp que cobra con CoDi. El repo se llama `codi-informal`. Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026.
+Varísimo es un bot de WhatsApp que cobra con CoDi para quien vende en la informalidad. Es el proyecto del equipo para el Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026. El repo se llama `codi-informal`.
 
 No hay frontend. El dueño escribe o manda una nota de voz, el bot pide el push o el QR a pey, y cuando el pago entra se lo avisa en el mismo chat.
 
@@ -10,7 +10,11 @@ Los requisitos de seguridad antes de habilitar cobros están en [docs/guardrails
 
 ## Estado
 
-Esqueleto del bot. Falta la API key de pey y el token de WhatsApp para cobrar de verdad.
+Desplegado en un VPS; cómo está montado y cómo se sube una versión nueva está en [docs/deploy.md](docs/deploy.md).
+
+- WhatsApp por Kapso o por la Cloud API de Meta, según `WHATSAPP_PROVIDER`.
+- Cobros con CoDi a través de pey. El tope de prueba es `PEY_MAX_AMOUNT` (0.01 por omisión).
+- OpenRouter para leer notas de voz y fotos de tickets.
 
 ## Cómo se le habla
 
@@ -22,12 +26,15 @@ Una nota de voz o la foto del ticket caen en las mismas frases: se leen con Open
 
 ## Proveedor de WhatsApp
 
-Por omisión habla con la Cloud API de Meta (`WHATSAPP_PROVIDER=meta`). Con `WHATSAPP_PROVIDER=kapso` el mismo tráfico sale y entra por el proxy de Kapso: `api.kapso.ai/meta/whatsapp/v24.0`, autenticado con `KAPSO_API_KEY` en la cabecera `X-API-Key`. El webhook se registra en Kapso con el evento `whatsapp.message.received` y se verifica con `KAPSO_WEBHOOK_SECRET` (firma HMAC en `X-Webhook-Signature`); con Kapso no aplica el `metadata.phone_number_id` de Meta ni el alta por `hub.challenge`.
+Por omisión habla con la Cloud API de Meta (`WHATSAPP_PROVIDER=meta`). Con `WHATSAPP_PROVIDER=kapso` el mismo tráfico sale y entra por el proxy de Kapso: `api.kapso.ai/meta/whatsapp/v24.0`, autenticado con `KAPSO_API_KEY` en la cabecera `X-API-Key`. El webhook se registra en Kapso con el evento `whatsapp.message.received` y se verifica con `KAPSO_WEBHOOK_SECRET` (firma HMAC en `X-Webhook-Signature`). Con Kapso el `phone_number_id` viene en el nivel superior del evento, no en `metadata` como en Meta, y el `hub.challenge` solo lo usa Meta.
 
 ## Cómo correr
 
+Python 3.12 o más nuevo, sin dependencias externas.
+
 ```bash
 cp .env.example .env
+set -a; . ./.env; set +a   # el bot lee variables de entorno; no abre el archivo .env
 PYTHONPATH=. python3 -m unittest discover -s tests
 PYTHONPATH=. python3 -m codi_informal
 ```
