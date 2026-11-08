@@ -12,7 +12,7 @@ def firma_valida(secreto: str, cuerpo: bytes, firma: str) -> bool:
 
 
 def extraer(payload: dict) -> dict:
-    vacio = {"tipo": "vacio", "texto": None, "de": None, "audio_id": None}
+    vacio = {"tipo": "vacio", "texto": None, "de": None, "audio_id": None, "id": None, "grupo": False}
     if not isinstance(payload, dict):
         return vacio
     try:
@@ -26,14 +26,14 @@ def extraer(payload: dict) -> dict:
     if not mensajes:
         return {"tipo": "status", "texto": None, "de": None, "audio_id": None}
     mensaje = mensajes[0]
-    de = mensaje.get("from")
+    base = {"de": mensaje.get("from"), "id": mensaje.get("id"), "grupo": "group_id" in mensaje}
     if mensaje.get("type") == "text":
         cuerpo = (mensaje.get("text") or {}).get("body") or ""
-        return {"tipo": "text", "texto": cuerpo, "de": de, "audio_id": None}
+        return {**base, "tipo": "text", "texto": cuerpo, "audio_id": None}
     if mensaje.get("type") == "audio":
         audio = mensaje.get("audio") or {}
-        return {"tipo": "audio", "texto": None, "de": de, "audio_id": audio.get("id")}
-    return {"tipo": "otro", "texto": None, "de": de, "audio_id": None}
+        return {**base, "tipo": "audio", "texto": None, "audio_id": audio.get("id")}
+    return {**base, "tipo": "otro", "texto": None, "audio_id": None}
 
 
 def cuerpo_texto(destino: str, texto: str) -> dict:
@@ -42,6 +42,15 @@ def cuerpo_texto(destino: str, texto: str) -> dict:
         "to": destino,
         "type": "text",
         "text": {"body": texto},
+    }
+
+
+def cuerpo_imagen(destino: str, media_id: str) -> dict:
+    return {
+        "messaging_product": "whatsapp",
+        "to": destino,
+        "type": "image",
+        "image": {"id": media_id},
     }
 
 
