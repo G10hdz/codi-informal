@@ -8,7 +8,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from codi_informal import openrouter, voz
+from codi_informal import openrouter, ticket, voz
 from codi_informal.agente import Agente, atender
 from codi_informal.firma import FirmaInvalida, verificar
 from codi_informal.limites import Limites
@@ -21,6 +21,7 @@ from codi_informal.whatsapp import (
 log = logging.getLogger("codi_informal")
 
 MAX_CUERPO = 64 * 1024
+MAX_IMAGEN = 5 * 1024 * 1024
 MAX_TEXTO = 2000
 MSG_POR_MIN = 10
 COBROS_POR_MIN = 3
@@ -75,6 +76,18 @@ def crear_transcribir(config: Config):
     return transcribir
 
 
+def crear_lector(config: Config):
+    """imagen_id -> {"monto", "concepto"} o None: baja la foto (5 MB) y la lee con
+    OpenRouter. La imagen no toca disco ni el registro (REQ-15)."""
+    def leer_imagen(imagen_id):
+        datos = descargar_media(imagen_id, config.whatsapp_token,
+                                max_bytes=MAX_IMAGEN, timeout=20)
+        if not datos:
+            return None
+        return ticket.leer(datos, lector=openrouter.lector)
+    return leer_imagen
+
+
 def handler(config: Config, conn, pey, limites=None):
     if limites is None:
         try:
@@ -83,7 +96,11 @@ def handler(config: Config, conn, pey, limites=None):
             log.warning("limites no disponibles: se bloquean los cobros")
     agente = Agente(pey, conn, max_amount=config.max_amount,
                     cobros_activos=config.cobros_activos)
-    transcribir = crear_transcribir(config) if config.openrouter_api_key else None
+    transcribir = None
+    leer_imagen = None
+    if config.openrouter_api_key:
+        transcribir = crear_transcribir(config)
+        leer_imagen = crear_lector(config)
 
     class Bot(BaseHTTPRequestHandler):
         def log_message(self, formato, *args):
@@ -193,7 +210,8 @@ def handler(config: Config, conn, pey, limites=None):
                 self._avisar(de, rechazo)
                 self._json(200, {"ok": True})
                 return
-            resultado = atender(entrada, agente, transcribir=transcribir, dueno=de, chat=de)
+            resultado = atender(entrada, agente, transcribir=transcribir,
+                                leer_imagen=leer_imagen, dueno=de, chat=de)
             if resultado and resultado.texto:
                 self._avisar(de, resultado.texto, resultado.imagen, resultado.qr_texto)
             self._json(200, {"ok": True})

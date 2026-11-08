@@ -18,6 +18,11 @@ VOZ_SIN_TRANSCRIPCION = (
     "Escríbeme: cobra 0.01 al 5512345678."
 )
 
+TICKET_ILEGIBLE = (
+    "Recibí la foto del ticket pero no pude leer el total. "
+    "Escríbeme: cobra 0.01 al 5512345678."
+)
+
 SIN_REGISTRO = "No hay registro donde guardar la operación, así que no cobro."
 INCIERTO = (
     "No sé si el cobro salió: pey no respondió a tiempo. No lo reintento para no cobrar doble. "
@@ -223,7 +228,8 @@ class Agente:
         return "\n".join(lineas)
 
 
-def atender(entrada: dict, agente: Agente, transcribir=None, *, dueno: str = "local", chat: str = "local") -> Resultado | None:
+def atender(entrada: dict, agente: Agente, transcribir=None, leer_imagen=None, *,
+            dueno: str = "local", chat: str = "local") -> Resultado | None:
     tipo = entrada.get("tipo")
     if tipo == "audio":
         texto = transcribir(entrada.get("audio_id")) if transcribir else None
@@ -231,6 +237,19 @@ def atender(entrada: dict, agente: Agente, transcribir=None, *, dueno: str = "lo
         if not texto:
             return Resultado(VOZ_SIN_TRANSCRIPCION)
         return agente.responder(texto, dueno=dueno, chat=chat)
+    if tipo == "image":
+        # se dice lo leído y el cobro lo pide la persona por texto: nada va a pey aquí
+        try:
+            leido = leer_imagen(entrada.get("imagen_id")) if leer_imagen else None
+        except Exception:
+            leido = None
+        if not isinstance(leido, dict) or leido.get("monto") is None:
+            return Resultado(TICKET_ILEGIBLE)
+        concepto = " ".join(str(leido.get("concepto") or "ticket").split())
+        return Resultado(
+            f"Leí ${leido['monto']} por {concepto}. "
+            f"Para cobrarlo escribe: cobra {leido['monto']} al <teléfono>"
+        )
     if tipo == "text":
         return agente.responder(entrada.get("texto") or "", dueno=dueno, chat=chat)
     return None
