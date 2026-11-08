@@ -198,12 +198,22 @@ class Limites_(Base):
         self.assertEqual(self.pey.pushes, 3)
 
     def test_mensaje_once_bloqueado(self):
-        self.levantar()
-        for i in range(11):
-            self.post(evento("qué se ha cobrado", mid=f"m{i}"))
-        # el 11 no llega al agente: se ve porque no hay efecto; probamos con cobro
-        self.assertEqual(self.post(evento("cobra 0.01 al 5512345678", mid="z")), 200)
-        self.assertEqual(self.pey.pushes, 0)
+        self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+        vistos = []
+
+        def falso(req, timeout=0):
+            vistos.append(req)
+            return _Respuesta(b'{"id": "m1"}')
+
+        with mock.patch("urllib.request.urlopen", falso):
+            for i in range(11):
+                self.post(evento("qué se ha cobrado", mid=f"m{i}", para="123"))
+        cuerpos = [json.loads(r.data)["text"]["body"] for r in vistos
+                   if r.full_url.endswith("/messages")]
+        # 10 respuestas del agente y el 11 es el rechazo del tope por minuto
+        self.assertEqual(len(cuerpos), 11)
+        self.assertEqual(cuerpos[:10], ["Todavía no entra ningún pago."] * 10)
+        self.assertEqual(cuerpos[10], "Vas muy rápido. Espera un minuto.")
 
     def test_sin_almacenamiento_bloquea_cobro(self):
         self.levantar(limites_path="/no/existe/l.sqlite")
