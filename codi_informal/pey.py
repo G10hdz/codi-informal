@@ -1,12 +1,15 @@
 """Cliente mínimo de la API pública de pey. Los campos salen de docs/pey-api.md."""
 
 import json
+import re
 import urllib.error
 import urllib.request
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 
-API_MAX = Decimal("1000000")
+API_MAX_CENTAVOS = 1_000_000 * 100
+TOPE_DEMO_CENTAVOS = 1
+_MONTO = re.compile(r"(\d{1,9})(?:[.,](\d{1,2}))?")
 
 
 class PeyError(Exception):
@@ -16,12 +19,40 @@ class PeyError(Exception):
         self.message = message
 
 
+class PeyIncierto(PeyError):
+    """El POST no terminó: pey pudo haber creado el cobro. No se reintenta."""
+
+    def __init__(self, message: str = "pey no respondió a tiempo"):
+        super().__init__(0, message)
+
+
+def centavos(valor) -> int:
+    """Monto en centavos enteros. Rechaza lo que no sea pesos con hasta 2 decimales."""
+    if isinstance(valor, bool) or valor is None:
+        raise ValueError("monto inválido")
+    coincide = _MONTO.fullmatch(str(valor).strip())
+    if coincide is None:
+        raise ValueError("monto inválido")
+    return int(coincide.group(1)) * 100 + int((coincide.group(2) or "0").ljust(2, "0"))
+
+
+def tope_centavos(valor) -> int | None:
+    """Tope de prueba. Ausente usa 1 centavo; inválido o mayor a 1 centavo: None (sin cobros)."""
+    if valor is None:
+        return TOPE_DEMO_CENTAVOS
+    try:
+        monto = centavos(valor)
+    except ValueError:
+        return None
+    return monto if 0 < monto <= TOPE_DEMO_CENTAVOS else None
+
+
+def pesos(cents: int) -> Decimal:
+    return Decimal(cents).scaleb(-2)
+
+
 def dinero(valor) -> Decimal:
-    if isinstance(valor, Decimal):
-        monto = valor
-    else:
-        monto = Decimal(str(valor).strip().replace(",", "."))
-    return monto.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return pesos(centavos(valor))
 
 
 def telefono_mx(raw: str) -> str | None:
@@ -61,11 +92,11 @@ class Pey:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.bank_account_id = bank_account_id or None
-        self.max_amount = dinero(max_amount)
+        self.max_cents = tope_centavos(max_amount) or 0
         self.transport = transport
 
     def push(self, *, amount, phone: str, concept: str, metadata: dict | None = None, num_ref: str | None = None) -> dict:
-        monto = self._tope(dinero(amount))
+        monto = self._tope(amount)
         tel = telefono_mx(phone)
         if tel is None:
             raise PeyError(400, "el celular tiene que ser de 10 dígitos")
@@ -78,7 +109,7 @@ class Pey:
 
     def qr(self, *, amount, concept: str, metadata: dict | None = None, num_ref: str | None = None) -> dict:
         # amount 0 le deja el monto a quien escanea. En la cuenta de prueba eso no se devuelve.
-        monto = self._tope(dinero(amount))
+        monto = self._tope(amount)
         cuerpo = {
             "amount": float(monto),
             "concept": concept,
@@ -91,14 +122,20 @@ class Pey:
         self._cuenta(cuerpo)
         return self._llamar("POST", "/codi/qr", cuerpo)
 
-    def _tope(self, monto: Decimal) -> Decimal:
-        if monto <= 0:
+    def _tope(self, amount) -> Decimal:
+        try:
+            cents = centavos(amount)
+        except ValueError:
+            raise PeyError(400, "monto inválido") from None
+        if cents <= 0:
             raise PeyError(400, "el monto tiene que ser mayor que 0")
-        if monto > API_MAX:
+        if cents > API_MAX_CENTAVOS:
             raise PeyError(400, "pey no acepta más de 1000000")
-        if monto > self.max_amount:
-            raise PeyError(400, f"el monto pasa el tope de prueba de {self.max_amount}")
-        return monto
+        if self.max_cents == 0:
+            raise PeyError(400, "cobros deshabilitados: PEY_MAX_AMOUNT inválido")
+        if cents > self.max_cents:
+            raise PeyError(400, "el monto pasa el tope de prueba")
+        return pesos(cents)
 
     def _cuenta(self, cuerpo: dict) -> None:
         if self.bank_account_id:
@@ -122,10 +159,14 @@ class Pey:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        if self.transport is not None:
-            status, payload = self.transport(method, path, crudo, headers)
-        else:
-            status, payload = _http(self.base_url + path, method, crudo, headers)
+        try:
+            if self.transport is not None:
+                status, payload = self.transport(method, path, crudo, headers)
+            else:
+                status, payload = _http(self.base_url + path, method, crudo, headers)
+        except OSError:
+            # timeout o corte: pey pudo haber creado el cobro
+            raise PeyIncierto() from None
         if status >= 400:
             raise PeyError(status, _mensaje_error(payload) or f"pey respondió {status}")
         if not payload:

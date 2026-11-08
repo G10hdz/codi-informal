@@ -4,8 +4,9 @@ import base64
 import re
 import time
 
-from codi_informal.pey import PeyError, dinero, telefono_mx
-from codi_informal.registro import listar
+from codi_informal.confirmacion import Confirmaciones
+from codi_informal.pey import PeyError, PeyIncierto, centavos, pesos, telefono_mx, tope_centavos
+from codi_informal.registro import crear_operacion, listar, marcar_operacion
 
 AYUDA = (
     "Soy el bot de cobros. Escríbeme, por ejemplo: cobra 0.01 al 5512345678. "
@@ -17,12 +18,22 @@ VOZ_SIN_TRANSCRIPCION = (
     "Escríbeme: cobra 0.01 al 5512345678."
 )
 
+SIN_REGISTRO = "No hay registro donde guardar la operación, así que no cobro."
+INCIERTO = (
+    "No sé si el cobro salió: pey no respondió a tiempo. No lo reintento para no cobrar doble. "
+    "Revisa con el operador antes de pedirlo otra vez."
+)
+
 _COBRA = re.compile(
-    r"cobra(?:r|me)?\s+\$?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:pesos?)?\s*(?:a|al)\s*([+\d][\d\s-]{8,22})",
+    r"cobra(?:r|me)?\s+\$?\s*(-?[\d.,]+)\s*(?:pesos?)?\s*(?:a|al)\s*([+\d][\d\s-]{8,22})",
     re.IGNORECASE,
 )
+_CONFIRMA = re.compile(r"confirmar\s+([0-9A-F]{6})", re.IGNORECASE)
 _LISTA = re.compile(r"qu[eé] se ha cobrado|movimientos|registro", re.IGNORECASE)
 _QR = re.compile(r"\bqr\b", re.IGNORECASE)
+
+AVISO_DINERO = "La prueba mueve dinero real y no se devuelve."
+CONCEPTO = "Cobro del puesto"
 
 
 class Resultado:
@@ -32,74 +43,138 @@ class Resultado:
 
 
 class Agente:
-    def __init__(self, pey, conn, *, max_amount="0.01"):
+    def __init__(self, pey, conn, *, max_amount="0.01", reloj=time.monotonic):
         self.pey = pey
         self.conn = conn
-        self.max_amount = dinero(max_amount)
+        self.max_cents = tope_centavos(max_amount)  # None: cobros deshabilitados
+        self.confirmaciones = Confirmaciones(reloj)
 
-    def responder(self, texto: str) -> Resultado:
+    def responder(self, texto: str, dueno: str = "local", chat: str = "local") -> Resultado:
         limpio = " ".join((texto or "").split())
         if not limpio:
             return Resultado(AYUDA)
+        confirma = _CONFIRMA.fullmatch(limpio)
+        if confirma:
+            return self._confirmar(confirma.group(1), dueno, chat)
         if _LISTA.search(limpio):
             return Resultado(self._lista())
         cobro = _COBRA.search(limpio)
         if cobro:
-            return self._push(cobro.group(1), cobro.group(2))
+            return self.cobrar(cobro.group(2), cobro.group(1), CONCEPTO, dueno=dueno, chat=chat)
         if _QR.search(limpio):
-            return self._qr()
+            return self._qr(dueno, chat)
         return Resultado(AYUDA)
 
-    def _push(self, amount_raw: str, phone_raw: str) -> Resultado:
+    def cobrar(self, telefono, monto, concepto=CONCEPTO, *, dueno="local", chat="local") -> Resultado:
+        """Punto único de entrada del cobro push: valida y deja un borrador por confirmar."""
         try:
-            monto = dinero(amount_raw)
-        except Exception:
-            return Resultado(AYUDA)
-        tel = telefono_mx(phone_raw)
+            cents = centavos(monto)
+        except ValueError:
+            return Resultado("No entendí el monto. Usa pesos con hasta dos decimales, por ejemplo 0.01.")
+        tel = telefono_mx(str(telefono))
         if tel is None:
             return Resultado("El celular tiene que ser de 10 dígitos.")
-        if monto <= 0 or monto > self.max_amount:
+        sin_cobro = self._no_se_puede(cents)
+        if sin_cobro:
+            return Resultado(sin_cobro)
+        if self.pey is None:
             return Resultado(
-                f"Ese monto pasa el tope de prueba de ${self.max_amount}. "
+                f"Entendí: cobrar ${pesos(cents)} al {tel}. Falta PEY_API_KEY, así que no lo envié."
+            )
+        if self.conn is None:
+            return Resultado(SIN_REGISTRO)
+        concepto = " ".join(str(concepto or CONCEPTO).split())[:100] or CONCEPTO
+        datos = {"tipo": "push", "cents": cents, "telefono": tel, "concepto": concepto}
+        return self._borrador(datos, f"cobrar ${pesos(cents)} al {tel} ({concepto})", dueno, chat)
+
+    def _no_se_puede(self, cents: int) -> str | None:
+        if self.max_cents is None:
+            return "Los cobros están deshabilitados: PEY_MAX_AMOUNT falta o no es válido (el máximo de la prueba es 0.01)."
+        if cents <= 0 or cents > self.max_cents:
+            return (
+                f"Ese monto no pasa el tope de prueba de ${pesos(self.max_cents)}. "
                 "Los pagos de prueba no se devuelven."
             )
-        if self.pey is None:
-            return Resultado(
-                f"Entendí: cobrar ${monto} al {tel}. Falta PEY_API_KEY, así que no lo envié."
-            )
-        try:
-            respuesta = self.pey.push(
-                amount=monto,
-                phone=tel,
-                concept="Cobro del puesto",
-                metadata={"canal": "whatsapp", "puesto": "puesto"},
-                num_ref=_referencia(),
-            )
-        except PeyError as exc:
-            return Resultado(f"pey no pudo cobrar: {exc.message}")
-        folio = respuesta.get("codiId") or respuesta.get("transactionId") or ""
+        return None
+
+    def _borrador(self, datos: dict, descripcion: str, dueno, chat) -> Resultado:
+        codigo = self.confirmaciones.crear(dueno, chat, datos)
         return Resultado(
-            f"Le mandé el cobro de ${monto} al {tel}. "
-            f"Le llega una notificación de su banco. Folio {folio}."
+            f"Voy a {descripcion}. {AVISO_DINERO} "
+            f"Para seguir responde: confirmar {codigo}. Vence en 2 minutos."
         )
 
-    def _qr(self) -> Resultado:
+    def _confirmar(self, codigo: str, dueno, chat) -> Resultado:
+        datos = self.confirmaciones.consumir(dueno, chat, codigo)
+        if datos is None:
+            return Resultado("No hay un cobro por confirmar con ese código, o ya venció. Pídelo de nuevo.")
+        sin_cobro = self._no_se_puede(datos["cents"])  # se revalida al consumir
+        if sin_cobro or self.conn is None or self.pey is None:
+            return Resultado(sin_cobro or SIN_REGISTRO)
+        if datos["tipo"] == "qr":
+            return self._ejecutar_qr(datos, dueno, chat)
+        return self._ejecutar_push(datos, dueno, chat)
+
+    def _crear(self, datos, dueno, chat):
+        cuenta = getattr(self.pey, "bank_account_id", None)
+        return crear_operacion(self.conn, dueno, chat, datos["tipo"], datos["cents"], datos["concepto"], cuenta)
+
+    def _ejecutar_push(self, datos, dueno, chat) -> Resultado:
+        op = self._crear(datos, dueno, chat)
+        try:
+            respuesta = self.pey.push(
+                amount=pesos(datos["cents"]),
+                phone=datos["telefono"],
+                concept=datos["concepto"],
+                metadata={"canal": "whatsapp", "puesto": "puesto"},
+                num_ref=op["num_ref"],
+            )
+        except PeyIncierto:
+            marcar_operacion(self.conn, op["op_id"], "incierto")
+            return Resultado(INCIERTO)
+        except PeyError as exc:
+            marcar_operacion(self.conn, op["op_id"], "fallida")
+            return Resultado(f"pey no pudo cobrar: {exc.message}")
+        marcar_operacion(self.conn, op["op_id"], "creada", transaction_id=respuesta.get("transactionId"))
+        folio = respuesta.get("codiId") or respuesta.get("transactionId") or ""
+        return Resultado(
+            f"Le mandé el cobro de ${pesos(datos['cents'])} al {datos['telefono']}. "
+            f"Le llega una notificación de su banco. Folio {folio}. "
+            "Esto no quiere decir que ya pagó: aviso cuando entre el pago."
+        )
+
+    def _qr(self, dueno, chat) -> Resultado:
         if self.pey is None:
             return Resultado(
-                f"Entendí: QR del puesto por ${self.max_amount}. "
+                f"Entendí: QR del puesto por ${pesos(self.max_cents or 0)}. "
                 "Falta PEY_API_KEY, así que no lo pedí."
             )
+        sin_cobro = self._no_se_puede(self.max_cents or 0)
+        if sin_cobro:
+            return Resultado(sin_cobro)
+        if self.conn is None:
+            return Resultado(SIN_REGISTRO)
+        datos = {"tipo": "qr", "cents": self.max_cents, "concepto": "Puesto"}
+        return self._borrador(datos, f"armar el QR del puesto por ${pesos(self.max_cents)}", dueno, chat)
+
+    def _ejecutar_qr(self, datos, dueno, chat) -> Resultado:
+        op = self._crear(datos, dueno, chat)
         try:
             respuesta = self.pey.qr(
-                amount=self.max_amount,
-                concept="Puesto",
+                amount=pesos(datos["cents"]),
+                concept=datos["concepto"],
                 metadata={"canal": "whatsapp", "puesto": "puesto"},
-                num_ref=_referencia(),
+                num_ref=op["num_ref"],
             )
+        except PeyIncierto:
+            marcar_operacion(self.conn, op["op_id"], "incierto")
+            return Resultado(INCIERTO)
         except PeyError as exc:
+            marcar_operacion(self.conn, op["op_id"], "fallida")
             return Resultado(f"pey no pudo armar el QR: {exc.message}")
+        marcar_operacion(self.conn, op["op_id"], "creada", qr_id=respuesta.get("id"))
         return Resultado(
-            f"QR del puesto por ${self.max_amount}. Se puede dejar pegado. "
+            f"QR del puesto por ${pesos(datos['cents'])}. Se puede dejar pegado. "
             "Cuando alguien pague, aviso por aquí.",
             _png(respuesta.get("qrImage")),
         )
