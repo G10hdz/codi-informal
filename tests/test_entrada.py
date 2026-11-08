@@ -18,6 +18,7 @@ from codi_informal.server import Config, handler
 APP = "secreto-meta-prueba"
 DUENO = "5215500000001"
 PNG = b"\x89PNG-de-prueba"
+CODIGO = "A1B2C3"
 
 
 class PeyDoble:
@@ -34,10 +35,28 @@ class PeyDoble:
         return {"qrImage": base64.b64encode(PNG).decode()}
 
 
-def evento(texto, de=DUENO, mid="wamid.1"):
-    return json.dumps({"entry": [{"changes": [{"value": {"messages": [
-        {"from": de, "id": mid, "type": "text", "text": {"body": texto}}
-    ]}}]}]}).encode()
+class _Respuesta:
+    def __init__(self, datos):
+        self._d = datos
+
+    def read(self):
+        return self._d
+
+    def close(self):
+        pass
+
+
+def _codigo_fijo():
+    """Deja siempre el mismo código de confirmación para poder contestarlo."""
+    return mock.patch("secrets.token_hex", lambda n: "a1b2c3")
+
+
+def evento(texto, de=DUENO, mid="wamid.1", para=""):
+    return json.dumps({"entry": [{"changes": [{"value": {
+        "metadata": {"phone_number_id": para},
+        "messages": [
+            {"from": de, "id": mid, "type": "text", "text": {"body": texto}}
+        ]}}]}]}).encode()
 
 
 def firma(cuerpo, secreto=APP):
@@ -69,16 +88,23 @@ class Base(unittest.TestCase):
         return config
 
     def post(self, cuerpo, firmado=True, headers=None):
+        # build_opener no pasa por urllib.request.urlopen: sirve dentro de mocks de urlopen
         h = {"Content-Type": "application/json"}
         if firmado:
             h["X-Hub-Signature-256"] = firma(cuerpo)
         h.update(headers or {})
         req = urllib.request.Request(self.base + "/webhooks/whatsapp", data=cuerpo, headers=h)
         try:
-            with urllib.request.urlopen(req) as r:
+            with urllib.request.build_opener().open(req) as r:
                 return r.status
         except urllib.error.HTTPError as e:
             return e.code
+
+    def cobra_y_confirma(self, mid):
+        """Un cobro y su confirmación; cada entrega espera 200."""
+        with _codigo_fijo():
+            self.assertEqual(self.post(evento("cobra 0.01 al 5512345678", mid=mid)), 200)
+        self.assertEqual(self.post(evento(f"confirmar {CODIGO}", mid=f"{mid}-ok")), 200)
 
 
 class FirmaYDueno(Base):
@@ -114,9 +140,9 @@ class FirmaYDueno(Base):
 class Dedupe(Base):
     def test_repetido_recibe_200_sin_efecto(self):
         self.levantar()
-        cuerpo = evento("cobra 0.01 al 5512345678", mid="wamid.dup")
-        self.assertEqual(self.post(cuerpo), 200)
-        self.assertEqual(self.post(cuerpo), 200)
+        self.cobra_y_confirma("wamid.dup")
+        # la reentrega del mismo evento no arma otro borrador ni otro cobro
+        self.cobra_y_confirma("wamid.dup")
         self.assertEqual(self.pey.pushes, 1)
 
     def test_persiste_entre_reinicios(self):
@@ -144,7 +170,7 @@ class Limites_(Base):
     def test_cuarto_cobro_del_minuto_bloqueado(self):
         self.levantar()
         for i in range(4):
-            self.post(evento("cobra 0.01 al 5512345678", mid=f"c{i}"))
+            self.cobra_y_confirma(f"c{i}")
         self.assertEqual(self.pey.pushes, 3)
 
     def test_mensaje_once_bloqueado(self):
@@ -166,27 +192,20 @@ class Salida(Base):
         self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
         vistos = []
 
-        class R:
-            def __init__(s, d): s.d = d
-            def read(s): return s.d
-            def close(s): pass
-
         def falso(req, timeout=0):
             vistos.append(req)
-            return R(b'{"id": "media1"}')
+            return _Respuesta(b'{"id": "media1"}')
 
         with mock.patch("urllib.request.urlopen", falso):
-            self.post_local = None
-            # el POST al bot usa urlopen real; lo hacemos con un opener propio
-            req = urllib.request.Request(
-                self.base + "/webhooks/whatsapp", data=evento("manda el qr"),
-                headers={"X-Hub-Signature-256": firma(evento("manda el qr"))})
-            urllib.request.build_opener().open(req).close()
+            with _codigo_fijo():
+                self.post(evento("manda el qr", mid="q1", para="123"))
+            self.post(evento(f"confirmar {CODIGO}", mid="q2", para="123"))
         urls = [r.full_url for r in vistos]
         self.assertTrue(any(u.endswith("/123/media") for u in urls), urls)
-        enviado = [json.loads(r.data) for r in vistos if r.full_url.endswith("/messages")]
-        self.assertEqual(enviado[0]["type"], "image")
-        self.assertEqual(enviado[0]["image"]["id"], "media1")
+        imagenes = [json.loads(r.data) for r in vistos
+                    if r.full_url.endswith("/messages") and json.loads(r.data).get("type") == "image"]
+        self.assertEqual(len(imagenes), 1)
+        self.assertEqual(imagenes[0]["image"]["id"], "media1")
 
     def test_fallo_de_envio_se_registra_sin_telefono_ni_cuerpo(self):
         self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
@@ -196,10 +215,7 @@ class Salida(Base):
 
         with self.assertLogs("codi_informal", level="WARNING") as logs:
             with mock.patch("urllib.request.urlopen", falla):
-                req = urllib.request.Request(
-                    self.base + "/webhooks/whatsapp", data=evento("hola"),
-                    headers={"X-Hub-Signature-256": firma(evento("hola"))})
-                urllib.request.build_opener().open(req).close()
+                self.post(evento("hola", mid="h1", para="123"))
         salida = "\n".join(logs.output)
         self.assertIn("0001", salida)
         self.assertNotIn("5215500000001", salida)
