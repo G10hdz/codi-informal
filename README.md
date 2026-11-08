@@ -18,7 +18,7 @@ Esqueleto del bot. Falta la API key de pey y el token de WhatsApp para cobrar de
 - `manda el qr del puesto`
 - `qué se ha cobrado`
 
-Una nota de voz usa esas mismas frases. Sin llave para transcribir, el bot pide el texto.
+Una nota de voz o la foto del ticket caen en las mismas frases: se leen con OpenRouter (`OPENROUTER_API_KEY`); sin llave o si no se entiende, el bot pide el texto.
 
 ## Cómo correr
 
