@@ -20,6 +20,10 @@ Esqueleto del bot. Falta la API key de pey y el token de WhatsApp para cobrar de
 
 Una nota de voz o la foto del ticket caen en las mismas frases: se leen con OpenRouter (`OPENROUTER_API_KEY`); sin llave o si no se entiende, el bot pide el texto.
 
+## Proveedor de WhatsApp
+
+Por omisión habla con la Cloud API de Meta (`WHATSAPP_PROVIDER=meta`). Con `WHATSAPP_PROVIDER=kapso` el mismo tráfico sale y entra por el proxy de Kapso: `api.kapso.ai/meta/whatsapp/v24.0`, autenticado con `KAPSO_API_KEY` en la cabecera `X-API-Key`. El webhook se registra en Kapso con el evento `whatsapp.message.received` y se verifica con `KAPSO_WEBHOOK_SECRET` (firma HMAC en `X-Webhook-Signature`); con Kapso no aplica el `metadata.phone_number_id` de Meta ni el alta por `hub.challenge`.
+
 ## Cómo correr
 
 ```bash
