@@ -89,8 +89,22 @@ def evento_audio(mid, audio_id="aud1", para="", de=DUENO):
         ]}}]}]}).encode()
 
 
+def evento_imagen(mid, imagen_id="img1", para="", de=DUENO):
+    return json.dumps({"entry": [{"changes": [{"value": {
+        "metadata": {"phone_number_id": para},
+        "messages": [
+            {"from": de, "id": mid, "type": "image",
+             "image": {"id": imagen_id, "mime_type": "image/jpeg"}}
+        ]}}]}]}).encode()
+
+
 def firma(cuerpo, secreto=APP):
     return "sha256=" + hmac.new(secreto.encode(), cuerpo, hashlib.sha256).hexdigest()
+
+
+def textos(enviados):
+    return [json.loads(r.data)["text"]["body"] for r in enviados
+            if r.full_url.endswith("/messages")]
 
 
 class Base(unittest.TestCase):
@@ -303,10 +317,6 @@ class VozCableada(Base):
             return _Resp(b'{"id": "m1"}')
         return falso
 
-    def _textos(self, enviados):
-        return [json.loads(r.data)["text"]["body"] for r in enviados
-                if r.full_url.endswith("/messages")]
-
     def test_nota_de_voz_se_transcribe_y_cobra_lo_mismo(self):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "key-or"}):
             self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
@@ -322,22 +332,25 @@ class VozCableada(Base):
                 "https://graph.facebook.com/v21.0/aud1",
                 "https://lookaside.fbsbx.com/aud",
             ])
-            self.assertIn("confirmar", self._textos(enviados)[0])
+            self.assertIn("confirmar", textos(enviados)[0])
             self.assertEqual(self.pey.pushes, 1)
 
     def test_sin_llave_de_openrouter_pide_el_texto(self):
         with mock.patch.dict(os.environ) as env:
             env.pop("OPENROUTER_API_KEY", None)
             self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+            llamadas = []
 
             def no_media(req, timeout=0):
+                llamadas.append(req.full_url)
                 raise AssertionError("sin llave no se baja el audio")
 
             enviados = []
             with mock.patch("urllib.request.urlopen", self._red(enviados)), \
                     mock.patch("codi_informal.whatsapp._abrir", no_media):
                 self.assertEqual(self.post(evento_audio("v3", para="123")), 200)
-            self.assertIn("nota de voz", self._textos(enviados)[0])
+            self.assertEqual(llamadas, [])
+            self.assertIn("nota de voz", textos(enviados)[0])
             self.assertEqual(self.pey.pushes, 0)
 
     def test_transcripcion_fallida_pide_la_orden_escrita(self):
@@ -347,8 +360,74 @@ class VozCableada(Base):
             with mock.patch("urllib.request.urlopen", self._red(enviados, transcript=None)), \
                     mock.patch("codi_informal.whatsapp._abrir", self._media):
                 self.assertEqual(self.post(evento_audio("v4", para="123")), 200)
-            self.assertIn("nota de voz", self._textos(enviados)[0])
+            self.assertIn("nota de voz", textos(enviados)[0])
             self.assertEqual(self.pey.pushes, 0)
+
+
+class TicketCableado(Base):
+    JPEG = b"\xff\xd8JPEG-DE-PRUEBA-UNICO-9911"
+
+    def _media(self, req, timeout=0):
+        if req.full_url == "https://graph.facebook.com/v21.0/img1":
+            return _Media(b'{"url": "https://lookaside.fbsbx.com/img"}')
+        return _Media(self.JPEG)
+
+    def _red(self, enviados, contenido):
+        def falso(req, timeout=0):
+            if "openrouter" in req.full_url:
+                return _Resp(json.dumps({"choices": [{"message": {"content": contenido}}]}).encode())
+            enviados.append(req)
+            return _Resp(b'{"id": "m1"}')
+        return falso
+
+    def test_foto_de_ticket_se_lee_y_el_cobro_reusa_el_flujo(self):
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "key-or"}):
+            config = self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+            enviados = []
+            with mock.patch("urllib.request.urlopen",
+                            self._red(enviados, '{"monto": "0.01", "concepto": "Tacos"}')), \
+                    mock.patch("codi_informal.whatsapp._abrir", self._media):
+                self.assertEqual(self.post(evento_imagen("i1", para="123")), 200)
+                # REQ-13: se dice lo leído y nada llega a pey; REQ-14: el cobro es el de siempre
+                self.assertEqual(self.pey.pushes, 0)
+                with _codigo_fijo():
+                    self.assertEqual(
+                        self.post(evento("cobra 0.01 al 5512345678", mid="i2", para="123")), 200)
+                self.assertEqual(
+                    self.post(evento(f"confirmar {CODIGO}", mid="i3", para="123")), 200)
+            self.assertEqual(textos(enviados)[0],
+                             "Leí $0.01 por Tacos. Para cobrarlo escribe: cobra 0.01 al <teléfono>")
+            self.assertEqual(self.pey.pushes, 1)
+            # REQ-15: la imagen no queda en el registro
+            crudo = open(config.registro_path, "rb").read()
+            self.assertNotIn(b"JPEG-DE-PRUEBA-UNICO-9911", crudo)
+
+    def test_ticket_ilegible_pide_la_orden_escrita(self):
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "key-or"}):
+            self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+            enviados = []
+            with mock.patch("urllib.request.urlopen", self._red(enviados, "no entiendo")), \
+                    mock.patch("codi_informal.whatsapp._abrir", self._media):
+                self.assertEqual(self.post(evento_imagen("i4", para="123")), 200)
+            self.assertIn("no pude leer", textos(enviados)[0].lower())
+            self.assertEqual(self.pey.pushes, 0)
+
+    def test_sin_llave_de_openrouter_tampoco_lee(self):
+        with mock.patch.dict(os.environ) as env:
+            env.pop("OPENROUTER_API_KEY", None)
+            self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+            llamadas = []
+
+            def no_media(req, timeout=0):
+                llamadas.append(req.full_url)
+                raise AssertionError("sin llave no se baja la foto")
+
+            enviados = []
+            with mock.patch("urllib.request.urlopen", self._red(enviados, "{}")), \
+                    mock.patch("codi_informal.whatsapp._abrir", no_media):
+                self.assertEqual(self.post(evento_imagen("i5", para="123")), 200)
+            self.assertEqual(llamadas, [])
+            self.assertIn("no pude leer", textos(enviados)[0].lower())
 
 
 class Salida(Base):

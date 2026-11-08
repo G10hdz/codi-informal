@@ -160,6 +160,32 @@ class WhatsAppTests(unittest.TestCase):
             r = atender({"tipo": "audio", "audio_id": "abc"}, agente, transcribir=lambda i: texto)
             self.assertEqual(r.texto, VOZ_SIN_TRANSCRIPCION)
 
+    def test_lee_mensaje_de_imagen(self):
+        entrada = extraer(
+            {"entry": [{"changes": [{"value": {"messages": [
+                {"from": "5215512345678", "id": "w1", "type": "image",
+                 "image": {"id": "img9", "mime_type": "image/jpeg"}}
+            ]}}]}]}
+        )
+        self.assertEqual(entrada["tipo"], "image")
+        self.assertEqual(entrada["imagen_id"], "img9")
+        self.assertEqual(entrada["de"], "5215512345678")
+
+    def test_ticket_leido_se_dice_sin_cobrar(self):
+        agente = Agente(None, None, max_amount="0.01")
+        r = atender({"tipo": "image", "imagen_id": "img1"}, agente,
+                    leer_imagen=lambda i: {"monto": Decimal("125.50"), "concepto": "Tacos"})
+        self.assertEqual(r.texto,
+                         "Leí $125.50 por Tacos. Para cobrarlo escribe: cobra 125.50 al <teléfono>")
+
+    def test_ticket_ilegible_pide_la_orden_escrita(self):
+        agente = Agente(None, None, max_amount="0.01")
+        for lector in (None, lambda i: None, lambda i: {"sin_monto": 1},
+                       lambda i: (_ for _ in ()).throw(RuntimeError("caido"))):
+            r = atender({"tipo": "image", "imagen_id": "img1"}, agente, leer_imagen=lector)
+            self.assertIn("no pude leer", r.texto.lower())
+            self.assertIn("cobra", r.texto)
+
     def test_el_mensaje_de_salida_es_el_de_la_cloud_api(self):
         cuerpo = cuerpo_texto("5215512345678", "Entró un pago")
         self.assertEqual(cuerpo["messaging_product"], "whatsapp")
