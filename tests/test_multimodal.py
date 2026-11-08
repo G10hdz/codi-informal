@@ -1,9 +1,36 @@
+import base64
+import json
 import os
+import tempfile
 import unittest
+import urllib.error
 from decimal import Decimal
 from unittest import mock
 
-from codi_informal import idioma, ticket, voz
+from codi_informal import idioma, openrouter, ticket, voz
+
+ENV_OR = {"OPENROUTER_API_KEY": "key-openrouter-prueba"}
+
+
+class _Resp:
+    def __init__(self, datos):
+        self._d = datos
+
+    def read(self, n=-1):
+        return self._d if n is None or n < 0 else self._d[:n]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def close(self):
+        pass
+
+
+def _completar(texto):
+    return _Resp(json.dumps({"choices": [{"message": {"content": texto}}]}).encode())
 
 
 class VozTests(unittest.TestCase):
@@ -159,6 +186,118 @@ class TicketTests(unittest.TestCase):
     def test_concepto_vacio_usa_valor_neutro(self):
         r = ticket.leer(b"i", lector=lambda b: {"monto": "10", "concepto": "  "})
         self.assertEqual(r["concepto"], "Ticket")
+
+
+class OpenRouterTests(unittest.TestCase):
+    def _audio(self, datos=b"OggS-audio-de-prueba"):
+        f = tempfile.NamedTemporaryFile(delete=False, suffix=".ogg")
+        self.addCleanup(lambda: os.path.exists(f.name) and os.remove(f.name))
+        f.write(datos)
+        f.close()
+        return f.name
+
+    def test_transcriptor_manda_audio_ogg_y_devuelve_el_texto(self):
+        vistos = []
+
+        def falso(req, timeout=0):
+            vistos.append(req)
+            return _completar("cobra 0.01 al 5512345678")
+
+        with mock.patch.dict(os.environ, ENV_OR):
+            with mock.patch("urllib.request.urlopen", falso):
+                texto = openrouter.transcriptor(self._audio())
+        self.assertEqual(texto, "cobra 0.01 al 5512345678")
+        (req,) = vistos
+        self.assertEqual(req.full_url, "https://openrouter.ai/api/v1/chat/completions")
+        self.assertEqual(req.headers["Authorization"], "Bearer key-openrouter-prueba")
+        cuerpo = json.loads(req.data)
+        self.assertEqual(cuerpo["model"], "google/gemini-2.5-flash-lite")
+        (parte_texto, parte_audio) = cuerpo["messages"][0]["content"]
+        self.assertEqual(parte_texto["type"], "text")
+        self.assertEqual(parte_audio["type"], "input_audio")
+        self.assertEqual(parte_audio["input_audio"]["format"], "ogg")
+        self.assertEqual(parte_audio["input_audio"]["data"],
+                         base64.b64encode(b"OggS-audio-de-prueba").decode())
+
+    def test_modelo_viene_del_env(self):
+        vistos = []
+
+        def falso(req, timeout=0):
+            vistos.append(req)
+            return _completar("hola")
+
+        env = {**ENV_OR, "OPENROUTER_MODEL": "otro/modelo-1"}
+        with mock.patch.dict(os.environ, env):
+            with mock.patch("urllib.request.urlopen", falso):
+                openrouter.transcriptor(self._audio())
+        self.assertEqual(json.loads(vistos[0].data)["model"], "otro/modelo-1")
+
+    def test_sin_llave_no_llama_a_la_red(self):
+        def falso(req, timeout=0):
+            raise AssertionError("no debe llamar")
+
+        with mock.patch.dict(os.environ) as env:
+            env.pop("OPENROUTER_API_KEY", None)
+            with mock.patch("urllib.request.urlopen", falso):
+                self.assertIsNone(openrouter.transcriptor(self._audio()))
+                self.assertIsNone(openrouter.lector(b"jpg"))
+
+    def test_transcriptor_tolera_fallos_y_respuestas_raras(self):
+        casos = [
+            lambda req, timeout=0: (_ for _ in ()).throw(urllib.error.URLError("caido")),
+            lambda req, timeout=0: _Resp(b"no json"),
+            lambda req, timeout=0: _Resp(b"{}"),
+            lambda req, timeout=0: _Resp(b'{"choices": []}'),
+            lambda req, timeout=0: _completar(""),
+        ]
+        with mock.patch.dict(os.environ, ENV_OR):
+            for falso in casos:
+                with mock.patch("urllib.request.urlopen", falso):
+                    self.assertIsNone(openrouter.transcriptor(self._audio()))
+
+    def test_lector_devuelve_monto_y_concepto(self):
+        vistos = []
+
+        def falso(req, timeout=0):
+            vistos.append(req)
+            return _completar('{"monto": "125.50", "concepto": "Tacos"}')
+
+        with mock.patch.dict(os.environ, ENV_OR):
+            with mock.patch("urllib.request.urlopen", falso):
+                r = openrouter.lector(b"\xff\xd8jpg-de-prueba")
+        self.assertEqual(r, {"monto": "125.50", "concepto": "Tacos"})
+        cuerpo = json.loads(vistos[0].data)
+        (parte_texto, parte_img) = cuerpo["messages"][0]["content"]
+        self.assertEqual(parte_img["type"], "image_url")
+        esperado = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8jpg-de-prueba").decode()
+        self.assertEqual(parte_img["image_url"]["url"], esperado)
+        self.assertIn("monto", parte_texto["text"])
+
+    def test_lector_acepta_json_entre_cercos(self):
+        def falso(req, timeout=0):
+            return _completar('```json\n{"monto": "0.01", "concepto": "Torta"}\n```')
+
+        with mock.patch.dict(os.environ, ENV_OR):
+            with mock.patch("urllib.request.urlopen", falso):
+                self.assertEqual(openrouter.lector(b"j"), {"monto": "0.01", "concepto": "Torta"})
+
+    def test_lector_rechaza_prosa_y_campos_faltantes(self):
+        def falso(texto):
+            return lambda req, timeout=0: _completar(texto)
+
+        malos = ["el total es 0.01", '{"total": "0.01"}', "[]", '"0.01"', '{"monto": "0.01"}']
+        with mock.patch.dict(os.environ, ENV_OR):
+            for malo in malos:
+                with mock.patch("urllib.request.urlopen", falso(malo)):
+                    self.assertIsNone(openrouter.lector(b"j"), malo)
+
+    def test_lector_tolera_fallos(self):
+        def falso(req, timeout=0):
+            raise urllib.error.URLError("caido")
+
+        with mock.patch.dict(os.environ, ENV_OR):
+            with mock.patch("urllib.request.urlopen", falso):
+                self.assertIsNone(openrouter.lector(b"j"))
 
 
 if __name__ == "__main__":
