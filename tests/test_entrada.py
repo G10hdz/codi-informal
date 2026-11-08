@@ -20,7 +20,15 @@ from tests.test_multimodal import _Resp
 
 APP = "secreto-meta-prueba"
 DUENO = "5215500000001"
-PNG = b"\x89PNG-de-prueba"
+def _png_minimo():
+    import struct, zlib
+    from codi_informal.png import _chunk
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + _chunk(b"IHDR", ihdr)
+            + _chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00")) + _chunk(b"IEND", b""))
+
+
+PNG = _png_minimo()
 CODIGO = "A1B2C3"
 
 

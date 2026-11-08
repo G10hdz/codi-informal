@@ -5,6 +5,7 @@ import re
 import time
 
 from codi_informal.confirmacion import Confirmaciones
+from codi_informal.png import a_rgb
 from codi_informal.pey import PeyError, PeyIncierto, centavos, pesos, telefono_mx, tope_centavos
 from codi_informal.registro import aviso, crear_operacion, listar, marcar_operacion, tiene_incierto
 
@@ -272,6 +273,7 @@ def _png(valor) -> bytes | None:
         datos = base64.b64decode("".join(valor.split()), validate=True)
     except Exception:
         return None
-    if datos.startswith(b"\x89PNG") or datos.startswith(b"\xff\xd8\xff"):
+    if datos.startswith(b"\xff\xd8\xff"):
         return datos
-    return None
+    # WhatsApp solo acepta PNG RGB/RGBA de 8 bits; el QR de pey puede venir en 1 bit
+    return a_rgb(datos)
