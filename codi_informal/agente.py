@@ -89,7 +89,7 @@ class Agente:
             return Resultado(SIN_REGISTRO)
         concepto = " ".join(str(concepto or CONCEPTO).split())[:100] or CONCEPTO
         datos = {"tipo": "push", "cents": cents, "telefono": tel, "concepto": concepto}
-        return self._borrador(datos, f"cobrar ${pesos(cents)} al {tel} ({concepto})", dueno, chat)
+        return self._borrador(datos, f"cobrar ${pesos(cents)} MXN al {tel} ({concepto})", dueno, chat)
 
     def _no_se_puede(self, cents: int) -> str | None:
         if self.max_cents is None:
@@ -167,7 +167,7 @@ class Agente:
         if self.conn is None:
             return Resultado(SIN_REGISTRO)
         datos = {"tipo": "qr", "cents": self.max_cents, "concepto": "Puesto"}
-        return self._borrador(datos, f"armar el QR del puesto por ${pesos(self.max_cents)}", dueno, chat)
+        return self._borrador(datos, f"armar el QR del puesto por ${pesos(self.max_cents)} MXN", dueno, chat)
 
     def _ejecutar_qr(self, datos, dueno, chat) -> Resultado:
         op = self._crear(datos, dueno, chat)
