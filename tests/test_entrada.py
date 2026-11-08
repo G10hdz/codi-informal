@@ -100,11 +100,11 @@ class Base(unittest.TestCase):
         except urllib.error.HTTPError as e:
             return e.code
 
-    def cobra_y_confirma(self, mid):
+    def cobra_y_confirma(self, mid, para=""):
         """Un cobro y su confirmación; cada entrega espera 200."""
         with _codigo_fijo():
-            self.assertEqual(self.post(evento("cobra 0.01 al 5512345678", mid=mid)), 200)
-        self.assertEqual(self.post(evento(f"confirmar {CODIGO}", mid=f"{mid}-ok")), 200)
+            self.assertEqual(self.post(evento("cobra 0.01 al 5512345678", mid=mid, para=para)), 200)
+        self.assertEqual(self.post(evento(f"confirmar {CODIGO}", mid=f"{mid}-ok", para=para)), 200)
 
 
 class FirmaYDueno(Base):
@@ -126,6 +126,17 @@ class FirmaYDueno(Base):
     def test_dueno_vacio_rechaza_todo(self):
         self.levantar(owner_whatsapp="")
         self.assertEqual(self.post(evento("hola")), 403)
+
+    def test_evento_de_otro_numero_se_ignora(self):
+        self.levantar(whatsapp_phone_number_id="123")
+        # firmado pero dirigido a otro negocio de la app: no arma borrador ni cobro
+        with _codigo_fijo():
+            self.assertEqual(
+                self.post(evento("cobra 0.01 al 5512345678", mid="o1", para="999")), 200)
+        self.post(evento(f"confirmar {CODIGO}", mid="o2", para="999"))
+        self.assertEqual(self.pey.pushes, 0)
+        self.cobra_y_confirma("o3", para="123")
+        self.assertEqual(self.pey.pushes, 1)
 
     def test_grupo_se_ignora(self):
         self.levantar()

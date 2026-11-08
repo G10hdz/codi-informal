@@ -12,7 +12,8 @@ def firma_valida(secreto: str, cuerpo: bytes, firma: str) -> bool:
 
 
 def extraer(payload: dict) -> dict:
-    vacio = {"tipo": "vacio", "texto": None, "de": None, "audio_id": None, "id": None, "grupo": False}
+    vacio = {"tipo": "vacio", "texto": None, "de": None, "audio_id": None, "id": None, "grupo": False,
+             "phone_number_id": None}
     if not isinstance(payload, dict):
         return vacio
     try:
@@ -20,13 +21,18 @@ def extraer(payload: dict) -> dict:
     except (KeyError, IndexError, TypeError):
         texto = payload.get("texto") or payload.get("transcript")
         if texto:
-            return {"tipo": "text", "texto": str(texto), "de": payload.get("de"), "audio_id": None}
+            return {"tipo": "text", "texto": str(texto), "de": payload.get("de"), "audio_id": None,
+                    "phone_number_id": None}
         return vacio
+    metadata = value.get("metadata") or {}
+    para = metadata.get("phone_number_id") if isinstance(metadata, dict) else None
     mensajes = value.get("messages") or []
     if not mensajes:
-        return {"tipo": "status", "texto": None, "de": None, "audio_id": None}
+        return {"tipo": "status", "texto": None, "de": None, "audio_id": None,
+                "phone_number_id": para}
     mensaje = mensajes[0]
-    base = {"de": mensaje.get("from"), "id": mensaje.get("id"), "grupo": "group_id" in mensaje}
+    base = {"de": mensaje.get("from"), "id": mensaje.get("id"), "grupo": "group_id" in mensaje,
+            "phone_number_id": para}
     if mensaje.get("type") == "text":
         cuerpo = (mensaje.get("text") or {}).get("body") or ""
         return {**base, "tipo": "text", "texto": cuerpo, "audio_id": None}
