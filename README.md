@@ -12,7 +12,7 @@ Diagramas de la arquitectura, de un cobro y de los estados de una operación, m�
 
 ## Estado
 
-Desplegado en un VPS; cómo está montado y cómo se sube una versión nueva está en [docs/deploy.md](docs/deploy.md).
+Desplegado en un VPS; cómo está montado y cómo se sube una versión nueva está en [docs/deploy.md](docs/deploy.md). La decisión de la puerta por WhatsApp está en [docs/adr/0001-puerta-whatsapp.md](docs/adr/0001-puerta-whatsapp.md). Notas de la entrega del hackatón: [docs/entrega.md](docs/entrega.md).
 
 - WhatsApp por Kapso o por la Cloud API de Meta, según `WHATSAPP_PROVIDER`.
 - Cobros con CoDi a través de pey. El tope de prueba es `PEY_MAX_AMOUNT` (0.01 por omisión).
