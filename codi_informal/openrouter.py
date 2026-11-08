@@ -21,6 +21,8 @@ _PEDIR_TICKET = (
     '{"monto": "<total as printed>", "concepto": "<short concept>"}'
 )
 
+MAX_RESPUESTA = 1024 * 1024
+
 
 def transcriptor(ruta) -> str | None:
     """Nota de voz ogg/opus a texto. None ante cualquier error."""
@@ -77,7 +79,10 @@ def _completar(contenido) -> str | None:
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT) as respuesta:
-        data = json.loads(respuesta.read() or b"{}")
+        crudo = respuesta.read(MAX_RESPUESTA + 1)
+    if len(crudo) > MAX_RESPUESTA:
+        return None
+    data = json.loads(crudo or b"{}")
     try:
         texto = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
