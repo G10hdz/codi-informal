@@ -337,11 +337,13 @@ def handler(config: Config, conn, pey, limites=None):
             base, auth = salida
             try:
                 if imagen:
-                    try:
-                        enviado = self._enviar_imagen(base, auth, destino, imagen)
-                    except Exception as exc:
-                        log.warning("imagen no enviada a %s: %s", _censurar(destino), _causa(exc))
-                        enviado = False
+                    enviado = False
+                    for _ in range(2):  # un reintento si la subida falla
+                        try:
+                            enviado = self._enviar_imagen(base, auth, destino, imagen, texto)
+                            break
+                        except Exception as exc:
+                            log.warning("imagen no enviada a %s: %s", _censurar(destino), _causa(exc))
                     if enviado:
                         return
                 if texto_imagen:
@@ -350,7 +352,7 @@ def handler(config: Config, conn, pey, limites=None):
             except Exception as exc:
                 log.warning("aviso no enviado a %s: %s", _censurar(destino), _causa(exc))
 
-        def _enviar_imagen(self, base, auth, destino, imagen) -> bool:
+        def _enviar_imagen(self, base, auth, destino, imagen, pie=None) -> bool:
             crudo, tipo = multipart_imagen(imagen)
             req = urllib.request.Request(
                 base + "/media", data=crudo, headers={**auth, "Content-Type": tipo}, method="POST"
@@ -358,7 +360,7 @@ def handler(config: Config, conn, pey, limites=None):
             media = json.loads(urllib.request.urlopen(req, timeout=15).read() or b"{}").get("id")
             if not media:
                 return False
-            self._post(base + "/messages", auth, cuerpo_imagen(destino, media))
+            self._post(base + "/messages", auth, cuerpo_imagen(destino, media, pie))
             return True
 
         def _post(self, url, auth, datos):

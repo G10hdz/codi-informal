@@ -174,12 +174,15 @@ def cuerpo_texto(destino: str, texto: str) -> dict:
     }
 
 
-def cuerpo_imagen(destino: str, media_id: str) -> dict:
+def cuerpo_imagen(destino: str, media_id: str, pie: str | None = None) -> dict:
+    imagen = {"id": media_id}
+    if pie:
+        imagen["caption"] = pie[:1024]
     return {
         "messaging_product": "whatsapp",
         "to": destino,
         "type": "image",
-        "image": {"id": media_id},
+        "image": imagen,
     }
 
 
