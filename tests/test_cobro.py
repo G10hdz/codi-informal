@@ -286,9 +286,9 @@ class OperacionTests(Base):
         self.assertNotIn("confirmar", r.texto)
         self.assertIn("sin resolver", r.texto.lower())
         self.assertEqual(len(self.llamadas), 1)
-        # otro dueño no está bloqueado
+        # el bloqueo es global: otra identidad tampoco cobra
         r2 = a.cobrar(TEL, "0.01", "x", dueno="d2", chat="c1")
-        self.assertIn("confirmar", r2.texto)
+        self.assertNotIn("confirmar", r2.texto)
 
     def test_no_confirma_un_borrador_mientras_hay_incierto(self):
         a = self.agente()
@@ -569,6 +569,18 @@ class ResolverTests(Base):
         self.error = None
         r = ag.responder(f"cobra 0.01 al {TEL}", dueno="d", chat="c")
         self.assertIn("confirmar", r.texto)
+
+
+class BloqueoGlobalTests(Base):
+    def test_incierto_de_un_dueno_bloquea_a_otra_identidad(self):
+        ag = self.agente()
+        self.error = TimeoutError()
+        ag.responder(f"confirmar {self.codigo(ag.responder(f'cobra 0.01 al {TEL}', dueno='local', chat='local'))}",
+                     dueno="local", chat="local")
+        self.error = None
+        r = ag.responder(f"cobra 0.01 al {TEL}", dueno="5215512345678", chat="5215512345678")
+        self.assertNotIn("confirmar", r.texto)
+        self.assertEqual(len(self.llamadas), 1)
 
 
 if __name__ == "__main__":

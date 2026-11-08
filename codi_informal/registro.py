@@ -77,8 +77,9 @@ def crear_operacion(conn, dueno, chat, tipo, amount_cents, concept, bank_account
     """
     with _CANDADO:
         if conn.execute(
-            "select 1 from operaciones where dueno=? and estado in ('creando', 'incierto') limit 1",
-            (dueno,),
+            # ponytail: global, el bot tiene un solo dueño y dos identidades (webhook y /mensaje)
+            # no deben poder brincarse el bloqueo; por dueño si algún día hay varios
+            "select 1 from operaciones where estado in ('creando', 'incierto') limit 1",
         ).fetchone():
             return None
         for _ in range(10):
@@ -155,8 +156,7 @@ def tiene_incierto(conn, dueno) -> bool:
     """Hay una operación de ese dueño en estado incierto sin reconciliar."""
     with _CANDADO:
         fila = conn.execute(
-            "select 1 from operaciones where dueno=? and estado='incierto' limit 1",
-            (dueno,),
+            "select 1 from operaciones where estado='incierto' limit 1",
         ).fetchone()
     return fila is not None
 
