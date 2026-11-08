@@ -36,6 +36,7 @@ class Config:
         self.whatsapp_verify_token = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
         self.whatsapp_app_secret = os.environ.get("WHATSAPP_APP_SECRET", "")
         self.owner_whatsapp = os.environ.get("OWNER_WHATSAPP", "")
+        self.cobros_activos = os.environ.get("COBROS_ACTIVOS") != "0"
         self.limites_path = os.environ.get("LIMITES_PATH", "data/limites.sqlite")
         self.registro_path = os.environ.get("REGISTRO_PATH", "data/registro.sqlite")
         self.host = os.environ.get("HOST", "127.0.0.1")
@@ -63,7 +64,8 @@ def handler(config: Config, conn, pey, limites=None):
             limites = Limites(config.limites_path)
         except Exception:
             log.warning("limites no disponibles: se bloquean los cobros")
-    agente = Agente(pey, conn, max_amount=config.max_amount)
+    agente = Agente(pey, conn, max_amount=config.max_amount,
+                    cobros_activos=config.cobros_activos)
 
     class Bot(BaseHTTPRequestHandler):
         def log_message(self, formato, *args):
