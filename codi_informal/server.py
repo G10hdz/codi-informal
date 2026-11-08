@@ -25,7 +25,8 @@ MAX_IMAGEN = 5 * 1024 * 1024
 MAX_TEXTO = 2000
 MSG_POR_MIN = 10
 COBROS_POR_MIN = 3
-_COBRO = re.compile(r"cobra(?:r|me)?\s|\bqr\b", re.IGNORECASE)
+# el cobro sale al confirmar el borrador, sea push o QR: ahí se cuenta el cupo
+_COBRO = re.compile(r"\bconfirmar\b", re.IGNORECASE)
 
 
 class Config:
@@ -210,18 +211,31 @@ def handler(config: Config, conn, pey, limites=None):
                 self._avisar(de, rechazo)
                 self._json(200, {"ok": True})
                 return
-            resultado = atender(entrada, agente, transcribir=transcribir,
+            voz = transcribir
+            if entrada.get("tipo") == "audio" and voz is not None:
+                # se transcribe aquí para que lo dicho pase por el mismo cupo que lo escrito
+                dicho = voz(entrada.get("audio_id"))
+                if dicho:
+                    rechazo = self._cupo(de, dicho, mensajes=False)
+                    if rechazo:
+                        self._avisar(de, rechazo)
+                        self._json(200, {"ok": True})
+                        return
+                    entrada = {**entrada, "tipo": "text", "texto": dicho}
+                else:
+                    voz = None
+            resultado = atender(entrada, agente, transcribir=voz,
                                 leer_imagen=leer_imagen, dueno=de, chat=de)
             if resultado and resultado.texto:
                 self._avisar(de, resultado.texto, resultado.imagen, resultado.qr_texto)
             self._json(200, {"ok": True})
 
-        def _cupo(self, de: str, texto: str):
+        def _cupo(self, de: str, texto: str, mensajes: bool = True):
             cobro = bool(_COBRO.search(texto))
             try:
                 if limites is None:
                     raise RuntimeError("sin almacenamiento")
-                if not limites.permitir(de, "mensajes", MSG_POR_MIN):
+                if mensajes and not limites.permitir(de, "mensajes", MSG_POR_MIN):
                     return "Vas muy rápido. Espera un minuto."
                 if cobro and not limites.permitir(de, "cobros", COBROS_POR_MIN):
                     return "Ya van 3 cobros en este minuto. Espera un poco."

@@ -335,6 +335,21 @@ class VozCableada(Base):
             self.assertIn("confirmar", textos(enviados)[0])
             self.assertEqual(self.pey.pushes, 1)
 
+    def test_cuarto_cobro_del_minuto_por_voz_bloqueado(self):
+        # el cupo de cobros cuenta la confirmación, que es donde se cobra, y también aplica
+        # a lo que dice una nota de voz
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "key-or"}):
+            self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+            enviados = []
+            with mock.patch("codi_informal.whatsapp._abrir", self._media):
+                for i in range(4):
+                    with mock.patch("urllib.request.urlopen", self._red(enviados)), _codigo_fijo():
+                        self.post(evento_audio(f"va{i}", para="123"))
+                    confirma = self._red(enviados, transcript=f"confirmar {CODIGO}")
+                    with mock.patch("urllib.request.urlopen", confirma):
+                        self.post(evento_audio(f"vb{i}", para="123"))
+            self.assertEqual(self.pey.pushes, 3)
+
     def test_sin_llave_de_openrouter_pide_el_texto(self):
         with mock.patch.dict(os.environ) as env:
             env.pop("OPENROUTER_API_KEY", None)
