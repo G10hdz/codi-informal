@@ -1,6 +1,5 @@
 """Servidor del bot. Escucha a WhatsApp y a pey. No sirve páginas."""
 
-import base64
 import json
 import logging
 import os
@@ -58,32 +57,13 @@ def _censurar(telefono) -> str:
     return "***" + "".join(c for c in str(telefono) if c.isdigit())[-4:]
 
 
-class _PeyQr:
-    """Liga la imagen de cada QR con su qrString, para el fallback de texto."""
-
-    def __init__(self, pey):
-        self._pey = pey
-        self.por_imagen = {}
-
-    def qr(self, **kw):
-        respuesta = self._pey.qr(**kw)
-        imagen, texto = respuesta.get("qrImage"), respuesta.get("qrString")
-        if imagen and texto:
-            self.por_imagen[imagen] = texto
-        return respuesta
-
-    def __getattr__(self, nombre):
-        return getattr(self._pey, nombre)
-
-
 def handler(config: Config, conn, pey, limites=None):
     if limites is None:
         try:
             limites = Limites(config.limites_path)
         except Exception:
             log.warning("limites no disponibles: se bloquean los cobros")
-    pey_qr = _PeyQr(pey) if pey is not None else None
-    agente = Agente(pey_qr, conn, max_amount=config.max_amount)
+    agente = Agente(pey, conn, max_amount=config.max_amount)
 
     class Bot(BaseHTTPRequestHandler):
         def log_message(self, formato, *args):
@@ -195,11 +175,7 @@ def handler(config: Config, conn, pey, limites=None):
                 return
             resultado = atender(entrada, agente, dueno=de, chat=de)
             if resultado and resultado.texto:
-                qr_texto = None
-                if resultado.imagen is not None and pey_qr is not None:
-                    clave = base64.b64encode(resultado.imagen).decode()
-                    qr_texto = pey_qr.por_imagen.pop(clave, None)
-                self._avisar(de, resultado.texto, resultado.imagen, qr_texto)
+                self._avisar(de, resultado.texto, resultado.imagen, resultado.qr_texto)
             self._json(200, {"ok": True})
 
         def _cupo(self, de: str, texto: str):
@@ -266,8 +242,8 @@ def handler(config: Config, conn, pey, limites=None):
                         enviado = False
                     if enviado:
                         return
-                    if texto_imagen:
-                        texto = f"{texto}\n\n{texto_imagen}"
+                if texto_imagen:
+                    texto = f"{texto}\n\n{texto_imagen}"
                 self._post(base + "/messages", auth, cuerpo_texto(destino, texto))
             except Exception as exc:
                 log.warning("aviso no enviado a %s: %s", _censurar(destino), _causa(exc))

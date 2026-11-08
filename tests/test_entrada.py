@@ -26,6 +26,7 @@ class PeyDoble:
     def __init__(self):
         self.pushes = 0
         self.qrs = 0
+        self.respuesta_qr = {"qrImage": base64.b64encode(PNG).decode(), "qrString": "QRSTRING-PRUEBA"}
 
     def push(self, **kw):
         self.pushes += 1
@@ -33,7 +34,7 @@ class PeyDoble:
 
     def qr(self, **kw):
         self.qrs += 1
-        return {"qrImage": base64.b64encode(PNG).decode(), "qrString": "QRSTRING-PRUEBA"}
+        return self.respuesta_qr
 
 
 class _Respuesta:
@@ -289,6 +290,25 @@ class Salida(Base):
                     if r.full_url.endswith("/messages") and json.loads(r.data).get("type") == "image"]
         self.assertEqual(len(imagenes), 1)
         self.assertEqual(imagenes[0]["image"]["id"], "media1")
+
+    def test_qr_sin_imagen_en_pey_manda_el_qrstring_como_texto(self):
+        self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+        # qrImage null es una respuesta válida de pey: el QR sale como texto
+        self.pey.respuesta_qr = {"qrImage": None, "qrString": "QRSTRING-PRUEBA"}
+        vistos = []
+
+        def falso(req, timeout=0):
+            vistos.append(req)
+            return _Respuesta(b'{"id": "media1"}')
+
+        with mock.patch("urllib.request.urlopen", falso):
+            with _codigo_fijo():
+                self.post(evento("manda el qr", mid="qn1", para="123"))
+            self.post(evento(f"confirmar {CODIGO}", mid="qn2", para="123"))
+        self.assertFalse([r for r in vistos if r.full_url.endswith("/media")])
+        textos = [json.loads(r.data)["text"]["body"] for r in vistos
+                  if r.full_url.endswith("/messages")]
+        self.assertIn("QRSTRING-PRUEBA", textos[-1])
 
     def test_qr_sin_imagen_cae_a_texto_con_el_qr_string(self):
         self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
