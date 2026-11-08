@@ -4,7 +4,7 @@ El bot corre en un contenedor `codi-informal` (imagen `python:3.13-slim`, sin bu
 
 | Qué | Dónde |
 |---|---|
-| URL pública | `https://codi.169.58.159.184.sslip.io` |
+| URL pública | `https://codi.<IP-del-VPS>.sslip.io` |
 | Código | `/opt/codi-informal/app/codi_informal` |
 | Variables | `/opt/codi-informal/.env` (permisos 600) |
 | Registro y límites | `/opt/codi-informal/data` |
@@ -12,8 +12,8 @@ El bot corre en un contenedor `codi-informal` (imagen `python:3.13-slim`, sin bu
 
 Webhooks a registrar:
 
-- WhatsApp (Meta o Kapso): `https://codi.169.58.159.184.sslip.io/webhooks/whatsapp`
-- pey: `https://codi.169.58.159.184.sslip.io/webhooks/pey`
+- WhatsApp (Meta o Kapso): `https://codi.<IP-del-VPS>.sslip.io/webhooks/whatsapp`
+- pey: `https://codi.<IP-del-VPS>.sslip.io/webhooks/pey`
 
 ## Subir una versión nueva
 
@@ -22,7 +22,7 @@ Desde un checkout de `main` actualizado:
 ```bash
 rsync -a --delete --exclude '__pycache__' codi_informal/ root@somas-vps:/opt/codi-informal/app/codi_informal/
 ssh root@somas-vps 'docker restart codi-informal && docker logs --tail 3 codi-informal'
-curl -s https://codi.169.58.159.184.sslip.io/health
+curl -s https://codi.<IP-del-VPS>.sslip.io/health
 ```
 
 ## Cambiar llaves
