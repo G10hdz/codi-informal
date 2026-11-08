@@ -1,22 +1,64 @@
 # Varísimo
 
-[Landing](https://varisimo.vercel.app) · [Video](https://youtu.be/Z2V4W_uf4ns) · [Release v0.1.0](https://github.com/G10hdz/codi-informal/releases/tag/v0.1.0)
+Cobra con CoDi desde WhatsApp. Sin app y sin terminal.
 
-Varísimo es un bot de WhatsApp que cobra con CoDi para quien vende en la informalidad. Es el proyecto del equipo para el Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026. El repo se llama `codi-informal`.
+[Pruébalo en el navegador](https://varisimo.vercel.app) · [Video de 87 s](https://youtu.be/Z2V4W_uf4ns) · [Pitch deck](https://varisimo.vercel.app/pitch.html) · [Release v0.1.0](https://github.com/G10hdz/codi-informal/releases/tag/v0.1.0)
 
-No hay frontend. El dueño escribe o manda una nota de voz, el bot pide el push o el QR a pey, y cuando el pago entra se lo avisa en el mismo chat.
+En el tianguis se cobra en efectivo o con transferencias que nadie confirma. Varísimo es un bot de WhatsApp para quien vende en la informalidad: el dueño del puesto le escribe "cobra 10 al 55…", confirma con un código y al cliente le llega el cobro en la app de su banco. Cuando paga, el bot avisa en el mismo chat. El dinero va de cuenta a cuenta por CoDi a través de [pey](https://docs.pey.mx); Varísimo nunca lo toca.
 
-La idea y el corte están en [IDEA.md](IDEA.md). Los campos de la API que sí usamos están en [docs/pey-api.md](docs/pey-api.md). La página del proyecto, con un chat de prueba, está en https://varisimo.vercel.app ([site/index.html](site/index.html)).
+Proyecto del equipo para el Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026. El repo se llama `codi-informal`.
 
-Los requisitos de seguridad antes de habilitar cobros están en [docs/guardrails.md](docs/guardrails.md).
+## Un cobro real
 
-Diagramas de la arquitectura, de un cobro y de los estados de una operación, más un explicador interactivo: [docs/diagramas](docs/diagramas/README.md).
+El 8 de noviembre cobramos $0.01 de punta a punta, por push a las 11:47 y por QR a las 12:17.
 
-## Cómo se ve
+<table>
+<tr>
+<td width="33%"><img src="site/fotos/1-chat.jpg" alt="El dueño pide el cobro por WhatsApp y lo confirma con un código"></td>
+<td width="33%"><img src="site/fotos/2-qr.jpg" alt="El bot manda el QR de CoDi al chat"></td>
+<td width="33%"><img src="site/fotos/3-pago.jpg" alt="El banco confirma el pago CoDi"></td>
+</tr>
+<tr>
+<td>1. El dueño pide el cobro y lo confirma</td>
+<td>2. El bot manda el cobro o el QR</td>
+<td>3. El cliente paga desde su banco</td>
+</tr>
+</table>
+
+## Qué hace
+
+- **Cobra por push o por QR.** El push llega como notificación CoDi al banco del cliente. El QR lo manda el bot al chat.
+- **Entiende texto, notas de voz y fotos de ticket.** La voz y la foto caen en las mismas frases que el texto.
+- **Avisa cuando entra el pago.** El webhook de pey va firmado y el aviso llega solo.
+- **Lleva la libreta.** "¿Qué cobré hoy?" o "¿qué cobré esta semana?" devuelve el total y los últimos pagos.
+- **Abre con un tap NFC.** Una tarjeta o una uña NFC abre WhatsApp con el cobro ya escrito.
+
+## Seguridad
+
+- Nada se cobra sin el código de confirmación de un solo uso del dueño.
+- Hay un tope por cobro (`PEY_MAX_AMOUNT`) y un kill switch (`COBROS_ACTIVOS=0`).
+- El registro no guarda CLABEs y los logs no imprimen teléfonos ni llaves.
+- Los webhooks de WhatsApp y de pey se verifican con firma HMAC.
+- gitleaks revisa cada PR y cada push a main.
+
+El detalle está en [docs/guardrails.md](docs/guardrails.md).
+
+## Cómo está hecho
 
 ![Arquitectura](docs/diagramas/arquitectura.svg)
 
-También hay un diagrama de [secuencia de un cobro](docs/diagramas/secuencia.svg), otro de los [estados de una operación](docs/diagramas/estados.svg) y un [explicador interactivo](docs/diagramas/como-funciona.html) con recorrido paso a paso, hecho con legibify, el skill de Gio.
+Python con solo la biblioteca estándar, SQLite y un contenedor en un VPS. También hay un diagrama de [secuencia de un cobro](docs/diagramas/secuencia.svg), otro de los [estados de una operación](docs/diagramas/estados.svg) y un [explicador interactivo](docs/diagramas/como-funciona.html) con recorrido paso a paso, hecho con legibify, el skill de Gio.
+
+La idea y el corte están en [IDEA.md](IDEA.md). Los campos de pey que sí usamos están en [docs/pey-api.md](docs/pey-api.md).
+
+## Lo que sigue
+
+Los specs están en [specs/](specs/) y el orden en [specs/roadmap.md](specs/roadmap.md):
+
+1. Varios puestos, cada uno con su dueño, su cuenta y sus límites.
+2. Una página pública por puesto que abre con el tap NFC.
+3. Una llamada de voz con la misma confirmación que el chat.
+4. La tanda entre vecinos: cada quien paga directo a quien tiene el turno y nadie guarda un bote.
 
 ## Estado
 
@@ -31,6 +73,7 @@ Desplegado en un VPS; cómo está montado y cómo se sube una versión nueva est
 - `cobra 0.01 al 5512345678`
 - `manda el qr del puesto`
 - `qué se ha cobrado`
+- `qué cobré hoy` o `qué cobré esta semana`
 
 Una nota de voz o la foto del ticket caen en las mismas frases: se leen con OpenRouter (`OPENROUTER_API_KEY`); sin llave o si no se entiende, el bot pide el texto.
 
