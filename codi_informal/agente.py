@@ -285,10 +285,6 @@ def atender(entrada: dict, agente: Agente, transcribir=None, leer_imagen=None, *
     return None
 
 
-def _referencia() -> str:
-    return str(int(time.time()))[-7:]
-
-
 def _desde(semana: bool, fecha) -> str:
     """Marca ISO (UTC) desde la que cuentan los pagos: hoy local o los últimos 7 días."""
     ahora = fecha()
