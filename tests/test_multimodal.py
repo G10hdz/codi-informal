@@ -80,7 +80,7 @@ class IdiomaTests(unittest.TestCase):
 
     def test_mensajes_en_ambos_idiomas_para_cada_clave(self):
         for clave in ("AYUDA", "TOPE", "CELULAR", "VOZ_SIN_TRANSCRIPCION"):
-            self.assertNotEqual(idioma.mensaje(clave, "es"), idioma.mensaje(clave, "en"))
+            self.assertNotEqual(idioma.mensaje(clave, "es", tope="1"), idioma.mensaje(clave, "en", tope="1"))
 
     def test_tope_se_formatea(self):
         self.assertIn("0.01", idioma.mensaje("TOPE", "en", tope="0.01"))
