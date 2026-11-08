@@ -211,6 +211,13 @@ class ConfirmacionTests(Base):
         self.assertEqual(path, "/codi/qr")
         self.assertEqual(cuerpo["amount"], 0.01)
 
+    def test_el_resultado_del_qr_trae_el_qrstring(self):
+        a = self.agente()
+        r = a.responder("manda el qr del puesto", dueno="d1", chat="c1")
+        r2 = a.responder(f"confirmar {self.codigo(r)}", dueno="d1", chat="c1")
+        self.assertIsNone(r2.imagen)
+        self.assertEqual(r2.qr_texto, "x")
+
     def test_la_confirmacion_muestra_la_moneda(self):
         a = self.agente()
         push = a.responder(f"cobra 0.01 al {TEL}", dueno="d1", chat="c1")

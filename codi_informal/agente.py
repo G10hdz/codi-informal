@@ -42,9 +42,10 @@ CONCEPTO = "Cobro del puesto"
 
 
 class Resultado:
-    def __init__(self, texto: str, imagen: bytes | None = None):
+    def __init__(self, texto: str, imagen: bytes | None = None, qr_texto: str | None = None):
         self.texto = texto
         self.imagen = imagen
+        self.qr_texto = qr_texto
 
 
 class Agente:
@@ -196,7 +197,7 @@ class Agente:
         )
         for pago in pagados:
             texto += " " + aviso(pago)
-        return Resultado(texto, _png(respuesta.get("qrImage")))
+        return Resultado(texto, _png(respuesta.get("qrImage")), qr_texto=respuesta.get("qrString"))
 
     def _lista(self) -> str:
         if self.conn is None:
