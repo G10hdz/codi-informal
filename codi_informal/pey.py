@@ -1,5 +1,6 @@
 """Cliente mínimo de la API pública de pey. Los campos salen de docs/pey-api.md."""
 
+import http.client
 import json
 import re
 import urllib.error
@@ -164,14 +165,22 @@ class Pey:
                 status, payload = self.transport(method, path, crudo, headers)
             else:
                 status, payload = _http(self.base_url + path, method, crudo, headers)
-        except OSError:
-            # timeout o corte: pey pudo haber creado el cobro
+        except (OSError, http.client.IncompleteRead):
+            # timeout o corte a la mitad: pey pudo haber creado el cobro
             raise PeyIncierto() from None
+        if status >= 500:
+            # pey falló de su lado: pudo haber creado el cobro antes de romperse
+            raise PeyIncierto(f"pey respondió {status}: pudo haber creado el cobro") from None
         if status >= 400:
             raise PeyError(status, _mensaje_error(payload) or f"pey respondió {status}")
         if not payload:
-            return {}
-        return json.loads(payload)
+            # 2xx sin cuerpo: no hay id con qué conciliar
+            raise PeyIncierto("pey respondió sin cuerpo: pudo haber creado el cobro") from None
+        try:
+            return json.loads(payload)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            # cuerpo truncado: pey pudo haber creado el cobro
+            raise PeyIncierto("la respuesta de pey vino cortada") from None
 
 
 def _http(url: str, method: str, crudo: bytes, headers: dict) -> tuple[int, bytes]:
