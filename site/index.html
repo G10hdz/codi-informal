@@ -166,6 +166,28 @@ h1 span{color:var(--rosa)}
 }
 .figura{text-align:center;color:var(--muted);font-size:14px;margin-top:14px}
 
+/* simulador */
+.demo-grid{display:grid;gap:30px;align-items:center}
+@media (min-width:720px){.demo-grid{grid-template-columns:1fr 1fr;gap:50px}}
+.demo-chips{display:flex;flex-wrap:wrap;gap:10px}
+.demo-chips button{font:inherit;font-size:14px;background:var(--card);color:var(--rosa-texto);border:2px solid var(--line-rosa);border-radius:999px;padding:10px 14px;cursor:pointer;text-align:left}
+.demo-chips button:hover{border-color:var(--rosa)}
+.demo-phone .chat{height:340px;overflow-y:auto;overscroll-behavior:contain;scrollbar-color:var(--chat-hora) var(--chat-wall)}
+.demo-phone .msg{flex-shrink:0;overflow-wrap:anywhere;white-space:pre-line}
+.demo-phone form{flex-wrap:wrap}
+.demo-phone label{width:100%;font-size:12px;color:var(--muted)}
+.demo-phone input{min-width:0;flex:1;width:0;font:inherit;font-size:16px;border:0;border-radius:999px;padding:10px 12px;background:var(--burbuja-bot);color:var(--ink)}
+.demo-phone input::placeholder{color:var(--chat-hora)}
+.demo-phone button[type=submit]{font:inherit;font-size:14px;font-weight:600;border:0;border-radius:999px;padding:12px;background:var(--chat-top);color:#fff;cursor:pointer}
+.demo-phone button:disabled{opacity:.65;cursor:wait}
+.demo-typing{display:flex;gap:4px;align-items:center;min-height:32px}
+.demo-typing span{width:5px;height:5px;border-radius:50%;background:var(--chat-hora);animation:typing 1s ease-in-out infinite alternate}
+.demo-typing span:nth-child(2){animation-delay:.2s}
+.demo-typing span:nth-child(3){animation-delay:.4s}
+.demo-phone canvas{display:block;width:174px;max-width:100%;height:auto;margin-bottom:8px;image-rendering:pixelated}
+@keyframes typing{to{opacity:.3;transform:translateY(-3px)}}
+@media (prefers-reduced-motion:reduce){.demo-typing span{animation:none}}
+
 /* banda del primer cobro */
 .hito{
   background:var(--ink);color:#fdf6ea;border-radius:26px;
@@ -263,6 +285,7 @@ footer a{color:var(--rosa-texto);font-weight:600}
         <p class="lema">Cobra con CoDi desde WhatsApp: con texto, voz o foto del ticket.</p>
         <div class="botones">
           <a class="btn btn-pri" href="https://github.com/G10hdz/codi-informal">Ver el código</a>
+          <a class="btn btn-sec" href="#pruebalo">Pruébalo</a>
           <a class="btn btn-sec" href="#como-funciona">Cómo funciona</a>
         </div>
       </div>
@@ -286,6 +309,37 @@ footer a{color:var(--rosa-texto);font-weight:600}
         </div>
         <figcaption class="figura">Un cobro de prueba, tal como se ve en WhatsApp.</figcaption>
       </figure>
+    </div>
+  </section>
+
+  <section class="wrap" id="pruebalo" aria-labelledby="h-pruebalo">
+    <div class="demo-grid">
+      <div>
+        <h2 id="h-pruebalo">Pruébalo</h2>
+        <p class="intro">Escribe como si estuvieras en tu puesto. Pide un cobro, confirma y mira cómo entra el pago.</p>
+        <div class="demo-chips" aria-label="Mensajes sugeridos">
+          <button type="button">cobra 10 al 5512345678</button>
+          <button type="button">manda QR de 25</button>
+          <button type="button">¿qué cobré hoy?</button>
+        </div>
+      </div>
+      <div>
+        <div class="phone demo-phone">
+          <div class="phone-top">
+            <span class="avatar" aria-hidden="true">V</span>
+            <div><b>Varísimo</b><small>simulación · en línea</small></div>
+          </div>
+          <ul class="chat" id="demo-log" role="log" aria-live="polite" aria-label="Chat de prueba" aria-relevant="additions" tabindex="0">
+            <li class="msg bot">Hola, ¿qué vamos a cobrar? Elige un mensaje o escribe aquí abajo.</li>
+          </ul>
+          <form class="phone-input" id="demo-form">
+            <label for="demo-input">Tu mensaje</label>
+            <input id="demo-input" type="text" placeholder="Escribe un mensaje" maxlength="240" autocomplete="off" enterkeyhint="send" required>
+            <button type="submit">Enviar</button>
+          </form>
+        </div>
+        <p class="figura">Simulación en tu navegador. El bot real corre en WhatsApp y cobra con pey.</p>
+      </div>
     </div>
   </section>
 
@@ -342,5 +396,128 @@ footer a{color:var(--rosa-texto);font-weight:600}
   <p>Proyecto del Hackatón DevDay Exchange, Ciudad de México, 2026.</p>
   <p>El código está en <a href="https://github.com/G10hdz/codi-informal">github.com/G10hdz/codi-informal</a>.</p>
 </footer>
+<script>
+(() => {
+  const log = document.getElementById('demo-log');
+  const form = document.getElementById('demo-form');
+  const input = document.getElementById('demo-input');
+  const send = form.querySelector('button');
+  const payments = [];
+  let pending = null;
+  let queue = Promise.resolve();
+  const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const money = cents => (cents / 100).toFixed(2).replace(/\.00$/, '');
+  const scroll = () => { log.scrollTop = log.scrollHeight; };
+
+  function message(text, owner = 'bot') {
+    const bubble = document.createElement('li');
+    bubble.className = 'msg ' + owner;
+    bubble.textContent = text;
+    log.append(bubble);
+    scroll();
+    return bubble;
+  }
+
+  function qr(bubble, seed) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 198;
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', 'QR de simulación, no sirve para pagar');
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, 198, 198);
+    ctx.fillStyle = '#1d1a16';
+    const finders = [[0, 0], [18, 0], [0, 18]];
+    for (let y = 0; y < 25; y++) {
+      for (let x = 0; x < 25; x++) {
+        const finder = finders.find(([fx, fy]) => x >= fx - 1 && x <= fx + 7 && y >= fy - 1 && y <= fy + 7);
+        let dark;
+        if (finder) {
+          const dx = x - finder[0], dy = y - finder[1];
+          dark = dx >= 0 && dx <= 6 && dy >= 0 && dy <= 6 &&
+            (dx === 0 || dx === 6 || dy === 0 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4));
+        } else {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+          dark = seed >>> 31;
+        }
+        if (dark) ctx.fillRect((x + 4) * 6, (y + 4) * 6, 6, 6);
+      }
+    }
+    bubble.prepend(canvas);
+  }
+
+  function reply(text, charge) {
+    queue = queue.then(async () => {
+      const dots = message('');
+      dots.classList.add('demo-typing');
+      dots.setAttribute('aria-hidden', 'true');
+      for (let i = 0; i < 3; i++) dots.append(document.createElement('span'));
+      await pause(700);
+      dots.remove();
+      const bubble = message(text);
+      if (charge) qr(bubble, charge.cents);
+      scroll();
+    });
+    return queue;
+  }
+
+  async function handle(text) {
+    const normalized = text.trim().toLowerCase();
+    const confirmation = normalized.match(/^confirmar\s+(\d{4})$/);
+    if (/^confirmar\b/.test(normalized)) {
+      const charge = pending;
+      pending = null;
+      if (!charge || !confirmation || confirmation[1] !== charge.code) {
+        await reply('Ese código no es. Nada se cobró.');
+        return;
+      }
+      await reply(charge.type === 'qr' ? 'Escanéalo desde tu app del banco' : 'Listo, le llegó el cobro CoDi a su banco.', charge.type === 'qr' ? charge : null);
+      setTimeout(async () => {
+        await reply('✅ Entró un pago de $' + money(charge.cents) + '.');
+        payments.push(charge.cents);
+      }, charge.type === 'qr' ? 2300 : 1800);
+      return;
+    }
+    if (/^¿?qu[eé] cobr[eé] hoy\??$/.test(normalized)) {
+      const total = payments.reduce((sum, cents) => sum + cents, 0);
+      await reply(payments.length ? 'Hoy entraron ' + payments.length + ' pagos: ' + payments.map(cents => '$' + money(cents)).join(', ') + '. Total: $' + money(total) + '.' : 'Hoy todavía no entra ningún pago en esta simulación.');
+      return;
+    }
+    const push = normalized.match(/^cobra\s+(\d+(?:[.,]\d{1,2})?)\s+al\s+(?:n[uú]mero\s+)?(\d{10})$/);
+    const codeQR = normalized.match(/^(?:manda qr de|qr)\s+(\d+(?:[.,]\d{1,2})?)$/);
+    if (push || codeQR) {
+      pending = null;
+      const cents = Math.round(Number((push || codeQR)[1].replace(',', '.')) * 100);
+      if (cents > 50000) { await reply('Ese monto pasa el tope del puesto.'); return; }
+      if (cents <= 0) { await reply('Escribe un monto mayor a $0.'); return; }
+      const code = String(1000 + Math.floor(Math.random() * 9000));
+      pending = { cents, code, type: push ? 'push' : 'qr' };
+      const destination = push ? ' a ' + push[2].slice(0, 2) + '•••' + push[2].slice(-4) : ' con QR';
+      await reply('Vas a cobrar $' + money(cents) + destination + '. Para confirmar escribe: confirmar ' + code);
+      return;
+    }
+    await reply('Prueba: cobra 10 al 5512345678, manda QR de 25 o ¿qué cobré hoy?');
+  }
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text || send.disabled) return;
+    message(text, 'dueno');
+    input.value = '';
+    send.disabled = true;
+    try { await handle(text); }
+    finally { send.disabled = false; }
+  });
+  document.querySelectorAll('.demo-chips button').forEach(chip => {
+    chip.addEventListener('click', () => {
+      if (send.disabled) return;
+      input.value = chip.textContent;
+      input.focus({ preventScroll: true });
+      form.requestSubmit();
+    });
+  });
+})();
+</script>
 </body>
 </html>
