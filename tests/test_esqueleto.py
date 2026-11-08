@@ -14,7 +14,7 @@ from math import floor
 from codi_informal.agente import VOZ_SIN_TRANSCRIPCION, Agente, atender
 from codi_informal.firma import FirmaInvalida, verificar
 from codi_informal.pey import Pey, PeyError
-from codi_informal.registro import abrir, listar, registrar_pago
+from codi_informal.registro import abrir, crear_operacion, listar, marcar_operacion, registrar_pago
 from codi_informal.server import Config, servir
 from codi_informal.whatsapp import cuerpo_texto, extraer, multipart_imagen
 
@@ -98,6 +98,9 @@ class RegistroTests(unittest.TestCase):
                     "externalMetadata": {"canal": "whatsapp", "puesto": "puesto"},
                 },
             }
+            # el pago solo cuenta si concilia con una operación propia
+            op = crear_operacion(conn, "d", "c", "push", 1, "Cobro del puesto")
+            marcar_operacion(conn, op["op_id"], "creada", transaction_id="tx1")
             self.assertTrue(registrar_pago(conn, evento, "msg1"))
             self.assertFalse(registrar_pago(conn, evento, "msg1"))
             filas = listar(conn)
@@ -193,6 +196,11 @@ class BotTests(unittest.TestCase):
                 "transactionId": "tx-webhook",
                 "metadata": {"clabe": "012180009999999999", "externalMetadata": {"puesto": "puesto"}},
             }
+            # el pago solo avisa si concilia con una operación del bot
+            conn = abrir(config.registro_path)
+            op = crear_operacion(conn, "d", "c", "push", 1, "Cobro del puesto")
+            marcar_operacion(conn, op["op_id"], "creada", transaction_id="tx-webhook")
+            conn.commit()
             crudo = json.dumps(evento).encode()
             headers = firmar(crudo)
             headers["Content-Type"] = "application/json"

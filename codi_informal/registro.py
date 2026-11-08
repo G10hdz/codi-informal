@@ -47,6 +47,24 @@ def abrir(path: str) -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        create table if not exists eventos (
+            transaction_id text primary key,
+            tipo text not null,
+            amount text not null,
+            concept text,
+            num_ref text,
+            date_paid integer,
+            canal text,
+            puesto text,
+            bank_account_id text,
+            codi_qr_id text,
+            webhook_id text,
+            created_at text not null
+        )
+        """
+    )
     conn.commit()
     return conn
 
@@ -91,15 +109,23 @@ def tiene_incierto(conn, dueno) -> bool:
     return fila is not None
 
 
-def _conciliar(conn, evento: dict, transaction_id: str) -> None:
-    """Push se liga por transactionId, QR por codiQrId. Monto y cuenta tienen que coincidir."""
+def _buscar_operacion(conn, evento: dict) -> sqlite3.Row | None:
+    """Push se liga por pey_transaction_id, QR por codiQrId."""
     if evento.get("type") == "codi.qr.payment_received":
         qr_id = evento.get("codiQrId")
-        fila = conn.execute("select * from operaciones where codi_qr_id=?", (str(qr_id),)).fetchone() if qr_id else None
-    else:
-        fila = conn.execute("select * from operaciones where pey_transaction_id=?", (transaction_id,)).fetchone()
-    if fila is None:
-        return
+        if qr_id is None:
+            return None
+        return conn.execute("select * from operaciones where codi_qr_id=?", (str(qr_id),)).fetchone()
+    transaction_id = evento.get("transactionId")
+    if transaction_id is None:
+        return None
+    return conn.execute(
+        "select * from operaciones where pey_transaction_id=?", (str(transaction_id),)
+    ).fetchone()
+
+
+def _monto_cuenta_ok(evento: dict, fila: sqlite3.Row) -> bool:
+    """Monto y cuenta del evento tienen que coincidir con la operación."""
     try:
         monto = centavos(evento.get("amount"))
     except ValueError:
@@ -107,23 +133,38 @@ def _conciliar(conn, evento: dict, transaction_id: str) -> None:
     cuenta = evento.get("bankAccountId")
     # sin cuenta en el evento o en la operación, es la cuenta ligada a la key
     cuenta_ok = not cuenta or not fila["bank_account_id"] or cuenta == fila["bank_account_id"]
-    estado = "pagado" if monto == fila["amount_cents"] and cuenta_ok else "pendiente"
-    conn.execute("update operaciones set estado=? where op_id=?", (estado, fila["op_id"]))
+    return monto == fila["amount_cents"] and cuenta_ok
 
 
-def registrar_pago(conn: sqlite3.Connection, evento: dict, webhook_id: str | None = None) -> bool:
-    tipo = evento.get("type")
-    if tipo not in ("codi.pn.payment_received", "codi.qr.payment_received"):
-        return False
-    transaction_id = evento.get("transactionId")
-    if not transaction_id:
-        raise ValueError("falta transactionId")
+def _guardar_pendiente(conn, evento, webhook_id, transaction_id) -> None:
+    """Deja el evento pendiente de conciliación, sin contarlo como recibido."""
     externo = _externo(evento.get("metadata"))
-    with _CANDADO:
-        return _insertar(conn, evento, webhook_id, transaction_id, tipo, externo)
+    conn.execute(
+        """
+        insert or ignore into eventos (
+            transaction_id, tipo, amount, concept, num_ref, date_paid,
+            canal, puesto, bank_account_id, codi_qr_id, webhook_id, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            transaction_id,
+            evento.get("type"),
+            str(evento.get("amount")),
+            evento.get("concept"),
+            evento.get("numRef"),
+            evento.get("datePaid"),
+            _texto(externo.get("canal")),
+            _texto(externo.get("puesto")),
+            evento.get("bankAccountId"),
+            evento.get("codiQrId"),
+            webhook_id,
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
 
 
-def _insertar(conn, evento, webhook_id, transaction_id, tipo, externo) -> bool:
+def _insertar_pago(conn, transaction_id, tipo, amount, concept, num_ref, date_paid,
+                   canal, puesto, webhook_id) -> bool:
     cursor = conn.execute(
         """
         insert or ignore into pagos (
@@ -132,23 +173,79 @@ def _insertar(conn, evento, webhook_id, transaction_id, tipo, externo) -> bool:
         ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            str(transaction_id),
+            transaction_id,
             tipo,
-            str(evento.get("amount")),
-            evento.get("concept"),
-            evento.get("numRef"),
-            evento.get("datePaid"),
-            _texto(externo.get("canal")),
-            _texto(externo.get("puesto")),
+            amount,
+            concept,
+            num_ref,
+            date_paid,
+            canal,
+            puesto,
             webhook_id,
             datetime.now(timezone.utc).isoformat(),
         ),
     )
-    nuevo = cursor.rowcount == 1
+    return cursor.rowcount == 1
+
+
+def _recibir(conn, datos, transaction_id, op_id, canal, puesto, webhook_id) -> bool:
+    """Guarda el pago, quita el evento pendiente y marca la operación pagada."""
+    nuevo = _insertar_pago(
+        conn,
+        transaction_id,
+        tipo=datos.get("type"),
+        amount=str(datos.get("amount")),
+        concept=datos.get("concept"),
+        num_ref=datos.get("numRef"),
+        date_paid=datos.get("datePaid"),
+        canal=canal,
+        puesto=puesto,
+        webhook_id=webhook_id,
+    )
+    conn.execute("delete from eventos where transaction_id=?", (transaction_id,))
     if nuevo:
-        _conciliar(conn, evento, str(transaction_id))
+        conn.execute("update operaciones set estado=? where op_id=?", ("pagado", op_id))
+    return nuevo
+
+
+def _procesar(conn, evento, webhook_id, transaction_id) -> bool:
+    ya = conn.execute("select 1 from pagos where transaction_id=?", (transaction_id,)).fetchone()
+    if ya is not None:
+        return False
+    fila = _buscar_operacion(conn, evento)
+    if fila is None:
+        _guardar_pendiente(conn, evento, webhook_id, transaction_id)
+        conn.commit()
+        return False
+    if not _monto_cuenta_ok(evento, fila):
+        conn.execute("update operaciones set estado=? where op_id=?", ("pendiente", fila["op_id"]))
+        _guardar_pendiente(conn, evento, webhook_id, transaction_id)
+        conn.commit()
+        return False
+    externo = _externo(evento.get("metadata"))
+    nuevo = _recibir(
+        conn, evento, transaction_id, fila["op_id"],
+        _texto(externo.get("canal")), _texto(externo.get("puesto")), webhook_id,
+    )
     conn.commit()
     return nuevo
+
+
+def registrar_pago(conn: sqlite3.Connection, evento: dict, webhook_id: str | None = None) -> bool:
+    """Registra solo pagos conciliados con una operación propia.
+
+    Devuelve True únicamente cuando el evento concilió y era nuevo. Eventos
+    desconocidos o con monto o cuenta distinta quedan pendientes, sin contar
+    como recibidos ni avisar.
+    """
+    tipo = evento.get("type")
+    if tipo not in ("codi.pn.payment_received", "codi.qr.payment_received"):
+        return False
+    transaction_id = evento.get("transactionId")
+    if not transaction_id:
+        raise ValueError("falta transactionId")
+    with _CANDADO:
+        return _procesar(conn, evento, webhook_id, str(transaction_id))
 
 
 def listar(conn: sqlite3.Connection, limite: int = 10) -> list[dict]:
