@@ -21,7 +21,7 @@ Las instrucciones no piden un formato ni un video. Los jueces no van a correr el
 2. Qué hace, en tres o cuatro líneas: cobro con CoDi por WhatsApp para quien trabaja en la informalidad. Texto, nota de voz o foto del ticket; push o QR por pey; confirmación antes de cobrar.
 3. Link al repo.
 4. Video de uno a dos minutos: pedir un cobro, confirmar, llega la notificación del banco, el bot avisa cuando entra el pago.
-5. Cómo probarlo: el número de WhatsApp desplegado y el tope de $0.01.
+5. Cómo probarlo: el bot solo atiende al número dueño registrado (`OWNER_WHATSAPP`), así que un juez que le escriba no recibe respuesta. El video es la prueba. Si un juez quiere probarlo, se registra su número a mano.
 
 ## Pagos de prueba
 
