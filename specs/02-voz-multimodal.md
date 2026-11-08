@@ -16,6 +16,20 @@ REQ-10. WHILE el equipo enciende un agente de voz en vivo, THE agente SHALL usar
 
 Evidencia: las frases de voz caen en `Agente.responder`. pey no documenta un endpoint de identidad.
 
+El agente en vivo es una llamada de voz al número del bot. Atiende solo al dueño registrado del puesto, y antes de cualquier cobro pide el mismo código de confirmación de un solo uso que el chat (`G04`).
+
+REQ-46. WHILE entra una llamada de un número que no es dueño de ningún puesto, THE agente SHALL decir que no reconoce al dueño y SHALL NOT cobrar.
+
+Evidencia: una llamada de un número ajeno no crea borrador ni llama a pey.
+
+REQ-47. WHILE una llamada pide un cobro, THE agente SHALL pedir el mismo código de confirmación de un solo uso que el chat, ligado al dueño y al borrador, antes de llamar a pey.
+
+Evidencia: una llamada de prueba no llega a pey sin el código, y el código del chat no sirve en la llamada de otro número.
+
+REQ-48. WHILE el dueño pregunta en una llamada qué se ha cobrado, THE agente SHALL responder solo con el registro de su puesto.
+
+Evidencia: la llamada del dueño de A no menciona pagos de B.
+
 ## Idiomas
 
 REQ-11. WHILE el mensaje viene en un idioma distinto del español y el detector está seguro, THE bot SHALL contestar en ese idioma.
@@ -46,3 +60,4 @@ Evidencia: el registro de esa prueba solo tiene monto, concepto y, si ya se cobr
 
 - NG-8. Prometer lectura perfecta de cualquier ticket. Si el monto no se lee, se pregunta.
 - NG-9. Un modelo de voz propio. Se usa el transcriptor que esté configurado.
+- NG-19. Verificar la identidad de la voz ante Banxico. pey no documenta ese endpoint. La identidad es el número que llama, como en WhatsApp.
