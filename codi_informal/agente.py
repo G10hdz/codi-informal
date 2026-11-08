@@ -260,9 +260,18 @@ def _referencia() -> str:
 
 
 def _png(valor) -> bytes | None:
+    """qrImage de pey -> bytes de imagen, o None si no es PNG ni JPEG.
+
+    Acepta base64 suelto o con prefijo data:. Bytes que no son imagen se
+    descartan para que el QR salga como texto en vez de una imagen rota."""
     if not isinstance(valor, str) or not valor:
         return None
+    if valor.startswith("data:") and "," in valor:
+        valor = valor.split(",", 1)[1]
     try:
-        return base64.b64decode(valor)
+        datos = base64.b64decode("".join(valor.split()), validate=True)
     except Exception:
         return None
+    if datos.startswith(b"\x89PNG") or datos.startswith(b"\xff\xd8\xff"):
+        return datos
+    return None

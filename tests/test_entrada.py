@@ -502,6 +502,53 @@ class Salida(Base):
                   if r.full_url.endswith("/messages") and json.loads(r.data).get("type") == "text"]
         self.assertIn("QRSTRING-PRUEBA", textos[-1])
 
+    def _qr_con(self, respuesta, falla_media=0):
+        self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+        if respuesta is not None:
+            self.pey.respuesta_qr = respuesta
+        vistos, fallas = [], [falla_media]
+
+        def falso(req, timeout=0):
+            vistos.append(req)
+            if req.full_url.endswith("/media") and fallas[0] > 0:
+                fallas[0] -= 1
+                raise urllib.error.URLError("media caida")
+            return _Respuesta(b'{"id": "media1"}')
+
+        with mock.patch("urllib.request.urlopen", falso):
+            with _codigo_fijo():
+                self.post(evento("manda el qr", mid="qd1", para="123"))
+            self.post(evento(f"confirmar {CODIGO}", mid="qd2", para="123"))
+        return vistos
+
+    def test_qr_con_prefijo_data_uri_sube_el_png_limpio(self):
+        b64 = base64.b64encode(PNG).decode()
+        vistos = self._qr_con({"qrImage": "data:image/png;base64," + b64, "qrString": "QRSTRING-PRUEBA"})
+        subidas = [r.data for r in vistos if r.full_url.endswith("/media")]
+        self.assertEqual(len(subidas), 1)
+        self.assertIn(b"\r\n\r\n" + PNG + b"\r\n", subidas[0])
+
+    def test_qr_imagen_lleva_el_texto_como_pie(self):
+        vistos = self._qr_con(None)
+        imagenes = [json.loads(r.data) for r in vistos
+                    if r.full_url.endswith("/messages") and json.loads(r.data).get("type") == "image"]
+        self.assertIn("QR del puesto", imagenes[0]["image"].get("caption", ""))
+
+    def test_qr_que_no_es_imagen_cae_a_texto(self):
+        malo = base64.b64encode(b"esto no es una imagen").decode()
+        vistos = self._qr_con({"qrImage": malo, "qrString": "QRSTRING-PRUEBA"})
+        self.assertFalse([r for r in vistos if r.full_url.endswith("/media")])
+        textos = [json.loads(r.data)["text"]["body"] for r in vistos
+                  if r.full_url.endswith("/messages") and json.loads(r.data).get("type") == "text"]
+        self.assertIn("QRSTRING-PRUEBA", textos[-1])
+
+    def test_qr_reintenta_la_subida_una_vez(self):
+        vistos = self._qr_con(None, falla_media=1)
+        self.assertEqual(len([r for r in vistos if r.full_url.endswith("/media")]), 2)
+        imagenes = [r for r in vistos
+                    if r.full_url.endswith("/messages") and json.loads(r.data).get("type") == "image"]
+        self.assertEqual(len(imagenes), 1)
+
     def test_pausado_contesta_y_no_llama_a_pey(self):
         self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123",
                       cobros_activos=False)
