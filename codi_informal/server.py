@@ -1,15 +1,27 @@
 """Servidor del bot. Escucha a WhatsApp y a pey. No sirve páginas."""
 
 import json
+import logging
 import os
+import re
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from codi_informal.agente import Agente, atender
 from codi_informal.firma import FirmaInvalida, verificar
+from codi_informal.limites import Limites
 from codi_informal.pey import Pey
 from codi_informal.registro import abrir, aviso, registrar_pago
-from codi_informal.whatsapp import extraer, firma_valida
+from codi_informal.whatsapp import cuerpo_imagen, cuerpo_texto, extraer, firma_valida, multipart_imagen
+
+log = logging.getLogger("codi_informal")
+
+MAX_CUERPO = 64 * 1024
+MAX_TEXTO = 2000
+MSG_POR_MIN = 10
+COBROS_POR_MIN = 3
+_COBRO = re.compile(r"cobra(?:r|me)?\s|\bqr\b", re.IGNORECASE)
 
 
 class Config:
@@ -24,6 +36,7 @@ class Config:
         self.whatsapp_verify_token = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
         self.whatsapp_app_secret = os.environ.get("WHATSAPP_APP_SECRET", "")
         self.owner_whatsapp = os.environ.get("OWNER_WHATSAPP", "")
+        self.limites_path = os.environ.get("LIMITES_PATH", "data/limites.sqlite")
         self.registro_path = os.environ.get("REGISTRO_PATH", "data/registro.sqlite")
         self.host = os.environ.get("HOST", "127.0.0.1")
         self.port = int(os.environ.get("PORT", "8787"))
@@ -40,7 +53,16 @@ def crear_pey(config: Config):
     )
 
 
-def handler(config: Config, conn, pey):
+def _censurar(telefono) -> str:
+    return "***" + "".join(c for c in str(telefono) if c.isdigit())[-4:]
+
+
+def handler(config: Config, conn, pey, limites=None):
+    if limites is None:
+        try:
+            limites = Limites(config.limites_path)
+        except Exception:
+            log.warning("limites no disponibles: se bloquean los cobros")
     agente = Agente(pey, conn, max_amount=config.max_amount)
 
     class Bot(BaseHTTPRequestHandler):
@@ -59,6 +81,14 @@ def handler(config: Config, conn, pey):
 
         def do_POST(self):
             ruta = urlparse(self.path).path
+            try:
+                largo = int(self.headers.get("Content-Length", "0") or "0")
+            except ValueError:
+                largo = -1
+            if largo < 0 or largo > MAX_CUERPO:
+                self.close_connection = True
+                self._json(413 if largo > 0 else 400, {"error": "cuerpo no aceptado"})
+                return
             cuerpo = self._cuerpo()
             if ruta == "/webhooks/pey":
                 self._pey(cuerpo)
@@ -107,13 +137,48 @@ def handler(config: Config, conn, pey):
             if entrada.get("tipo") == "status":
                 self._json(200, {"ok": True})
                 return
+            if entrada.get("grupo"):
+                self._json(200, {"ok": True})
+                return
             if not _mismo_telefono(entrada.get("de"), config.owner_whatsapp):
                 self._json(403, {"error": "remitente no autorizado"})
                 return
+            de = entrada["de"]
+            try:
+                if entrada.get("id") and limites and limites.repetido(entrada["id"]):
+                    self._json(200, {"ok": True})
+                    return
+            except Exception:
+                log.warning("dedupe no disponible")
+            texto = entrada.get("texto") or ""
+            if len(texto) > MAX_TEXTO:
+                self._avisar(de, "El mensaje es muy largo. Escríbelo en menos de 2,000 caracteres.")
+                self._json(200, {"ok": True})
+                return
+            rechazo = self._cupo(de, texto)
+            if rechazo:
+                self._avisar(de, rechazo)
+                self._json(200, {"ok": True})
+                return
             resultado = atender(entrada, agente)
-            if resultado and resultado.texto and entrada.get("de"):
-                self._avisar(entrada["de"], resultado.texto)
+            if resultado and resultado.texto:
+                self._avisar(de, resultado.texto, resultado.imagen)
             self._json(200, {"ok": True})
+
+        def _cupo(self, de: str, texto: str):
+            cobro = bool(_COBRO.search(texto))
+            try:
+                if limites is None:
+                    raise RuntimeError("sin almacenamiento")
+                if not limites.permitir(de, "mensajes", MSG_POR_MIN):
+                    return "Vas muy rápido. Espera un minuto."
+                if cobro and not limites.permitir(de, "cobros", COBROS_POR_MIN):
+                    return "Ya van 3 cobros en este minuto. Espera un poco."
+            except Exception:
+                if cobro:
+                    log.warning("limites no disponibles: cobro bloqueado %s", _censurar(de))
+                    return "Ahorita no puedo cobrar. Intenta más tarde."
+            return None
 
         def _pey(self, cuerpo: bytes):
             try:
@@ -149,29 +214,43 @@ def handler(config: Config, conn, pey):
                     self._avisar(config.owner_whatsapp, texto)
             self._json(200, {"ok": True, "nuevo": nuevo, "aviso": texto})
 
-        def _avisar(self, destino: str, texto: str):
+        def _avisar(self, destino: str, texto: str, imagen: bytes | None = None):
             if not config.whatsapp_token or not config.whatsapp_phone_number_id:
                 return
-            from codi_informal.whatsapp import cuerpo_texto
-            import urllib.request
+            base = f"https://graph.facebook.com/v21.0/{config.whatsapp_phone_number_id}"
+            auth = {"Authorization": f"Bearer {config.whatsapp_token}"}
+            try:
+                if imagen:
+                    try:
+                        enviado = self._enviar_imagen(base, auth, destino, imagen)
+                    except Exception as exc:
+                        log.warning("imagen no enviada a %s: %s", _censurar(destino), _causa(exc))
+                        enviado = False
+                    if enviado:
+                        return
+                self._post(base + "/messages", auth, cuerpo_texto(destino, texto))
+            except Exception as exc:
+                log.warning("aviso no enviado a %s: %s", _censurar(destino), _causa(exc))
 
-            url = (
-                "https://graph.facebook.com/v21.0/"
-                f"{config.whatsapp_phone_number_id}/messages"
+        def _enviar_imagen(self, base, auth, destino, imagen) -> bool:
+            crudo, tipo = multipart_imagen(imagen)
+            req = urllib.request.Request(
+                base + "/media", data=crudo, headers={**auth, "Content-Type": tipo}, method="POST"
             )
+            media = json.loads(urllib.request.urlopen(req, timeout=15).read() or b"{}").get("id")
+            if not media:
+                return False
+            self._post(base + "/messages", auth, cuerpo_imagen(destino, media))
+            return True
+
+        def _post(self, url, auth, datos):
             req = urllib.request.Request(
                 url,
-                data=json.dumps(cuerpo_texto(destino, texto)).encode(),
-                headers={
-                    "Authorization": f"Bearer {config.whatsapp_token}",
-                    "Content-Type": "application/json",
-                },
+                data=json.dumps(datos).encode(),
+                headers={**auth, "Content-Type": "application/json"},
                 method="POST",
             )
-            try:
-                urllib.request.urlopen(req, timeout=15).close()
-            except Exception:
-                return
+            urllib.request.urlopen(req, timeout=15).close()
 
         def _cuerpo(self) -> bytes:
             largo = int(self.headers.get("Content-Length", "0") or "0")
@@ -196,6 +275,11 @@ def handler(config: Config, conn, pey):
     return Bot
 
 
+def _causa(exc: Exception) -> str:
+    # solo el tipo y el código HTTP: el mensaje puede traer cuerpos o teléfonos
+    return f"{type(exc).__name__} {getattr(exc, 'code', '')}".strip()
+
+
 def _mismo_telefono(uno, otro) -> bool:
     def digitos(valor):
         numero = "".join(c for c in str(valor or "") if c.isdigit())
@@ -210,9 +294,10 @@ def _mismo_telefono(uno, otro) -> bool:
 
 def servir(config: Config | None = None):
     config = config or Config()
-    carpeta = os.path.dirname(config.registro_path)
-    if carpeta:
-        os.makedirs(carpeta, exist_ok=True)
+    for ruta in (config.registro_path, config.limites_path):
+        carpeta = os.path.dirname(ruta)
+        if carpeta:
+            os.makedirs(carpeta, exist_ok=True)
     conn = abrir(config.registro_path)
     pey = crear_pey(config)
     httpd = ThreadingHTTPServer((config.host, config.port), handler(config, conn, pey))

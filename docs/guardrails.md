@@ -2,6 +2,8 @@
 
 Estado: propuesta de requisitos, pendiente de implementación y pruebas. Fecha: 7 de noviembre de 2026.
 
+Implementado en la entrada (`feature/entrada`): firma de WhatsApp, lista cerrada de dueños y grupos ignorados (G01), dedupe persistente por message id (G05), 10 mensajes y 3 cobros por minuto con cobros bloqueados sin almacenamiento, tope de 64 KB y 2,000 caracteres (G07), y log de fallos de envío sin cuerpos ni teléfonos completos (G08, parcial).
+
 Alcance: texto o voz del dueño, solicitud de push o QR a pey y aviso de pago por WhatsApp, según [IDEA.md](../IDEA.md). En este checkout solo hay documentación; no hay código que permita verificar controles. Ningún documento ni prompt vuelve invulnerable al bot. Estos requisitos reducen riesgos y definen cuándo bloquear un cobro.
 
 ## Límites del producto
