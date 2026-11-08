@@ -314,6 +314,21 @@ def listar(conn: sqlite3.Connection, limite: int = 10) -> list[dict]:
     return [dict(fila) for fila in filas]
 
 
+def pagos_desde(conn: sqlite3.Connection, desde: str) -> list[dict]:
+    """Pagos con created_at >= desde (ISO UTC), más recientes primero. Sin datos de pago ni ids."""
+    with _CANDADO:
+        filas = conn.execute(
+            """
+            select amount, concept, created_at
+            from pagos
+            where created_at >= ?
+            order by created_at desc
+            """,
+            (desde,),
+        ).fetchall()
+    return [dict(fila) for fila in filas]
+
+
 def aviso(fila: dict) -> str:
     concepto = fila.get("concept") or "sin concepto"
     return f"Entró un pago de ${fila['amount']} ({concepto}). Ya quedó en el registro."

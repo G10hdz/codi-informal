@@ -3,11 +3,13 @@
 import base64
 import re
 import time
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from codi_informal.confirmacion import Confirmaciones
 from codi_informal.png import a_rgb
 from codi_informal.pey import PeyError, PeyIncierto, centavos, pesos, telefono_mx, tope_centavos
-from codi_informal.registro import aviso, crear_operacion, listar, marcar_operacion, tiene_incierto
+from codi_informal.registro import aviso, crear_operacion, listar, marcar_operacion, pagos_desde, tiene_incierto
 
 AYUDA = (
     "Soy Varísimo, el bot de cobros. Escríbeme, por ejemplo: cobra 0.01 al 5512345678. "
@@ -45,6 +47,10 @@ _COBRA = re.compile(
 )
 _CONFIRMA = re.compile(r"confirmar\s+([0-9A-F]{6})", re.IGNORECASE)
 _LISTA = re.compile(r"qu[eé] se ha cobrado|movimientos|registro", re.IGNORECASE)
+_LIBRETA = re.compile(
+    r"\b(?:qu[eé]? cobr[eé]|cu[aá]nto cobr[eé]|resumen|libreta|semana)\b",
+    re.IGNORECASE,
+)
 _QR = re.compile(r"\bqr\b", re.IGNORECASE)
 
 AVISO_DINERO = "La prueba mueve dinero real y no se devuelve."
@@ -60,12 +66,13 @@ class Resultado:
 
 class Agente:
     def __init__(self, pey, conn, *, max_amount="0.01", reloj=time.monotonic,
-                 cobros_activos=True):
+                 cobros_activos=True, fecha=None):
         self.pey = pey
         self.conn = conn
         self.max_cents = tope_centavos(max_amount)  # None: cobros deshabilitados
         self.cobros_activos = cobros_activos
         self.confirmaciones = Confirmaciones(reloj)
+        self.fecha = fecha or datetime.now
 
     def responder(self, texto: str, dueno: str = "local", chat: str = "local") -> Resultado:
         limpio = " ".join((texto or "").split())
@@ -76,6 +83,8 @@ class Agente:
             return self._confirmar(confirma.group(1), dueno, chat)
         if _LISTA.search(limpio):
             return Resultado(self._lista())
+        if _LIBRETA.search(limpio):
+            return Resultado(self._libreta(semana="semana" in limpio.lower()))
         cobro = _COBRA.search(limpio)
         if cobro:
             return self.cobrar(cobro.group(2), cobro.group(1), CONCEPTO, dueno=dueno, chat=chat)
@@ -228,6 +237,24 @@ class Agente:
             lineas.append(f"- ${fila['amount']} {fila.get('concept') or ''} ({fila['transaction_id']})")
         return "\n".join(lineas)
 
+    def _libreta(self, semana: bool = False) -> str:
+        if self.conn is None:
+            return "Todavía no hay registro."
+        etiqueta = "Esta semana" if semana else "Hoy"
+        filas = pagos_desde(self.conn, _desde(semana, self.fecha))
+        if not filas:
+            return f"{etiqueta} no ha entrado ningún pago."
+        total = sum((Decimal(fila["amount"]) for fila in filas), Decimal("0"))
+        if len(filas) == 1:
+            lineas = [f"{etiqueta} entró 1 pago por ${total:.2f}:"]
+        else:
+            lineas = [f"{etiqueta} entraron {len(filas)} pagos por ${total:.2f}:"]
+        for fila in filas[:5]:
+            concepto = " ".join(re.sub(r"\d{10,}", " ", str(fila.get("concept") or "")).split())
+            hora = _hora(fila["created_at"])
+            lineas.append(" ".join(p for p in [f"· ${fila['amount']}", concepto, hora] if p))
+        return "\n".join(lineas)
+
 
 def atender(entrada: dict, agente: Agente, transcribir=None, leer_imagen=None, *,
             dueno: str = "local", chat: str = "local") -> Resultado | None:
@@ -258,6 +285,22 @@ def atender(entrada: dict, agente: Agente, transcribir=None, leer_imagen=None, *
 
 def _referencia() -> str:
     return str(int(time.time()))[-7:]
+
+
+def _desde(semana: bool, fecha) -> str:
+    """Marca ISO (UTC) desde la que cuentan los pagos: hoy local o los últimos 7 días."""
+    ahora = fecha()
+    if semana:
+        return (ahora.astimezone(timezone.utc) - timedelta(days=7)).isoformat()
+    inicio = ahora.replace(hour=0, minute=0, second=0, microsecond=0)
+    return inicio.astimezone(timezone.utc).isoformat()
+
+
+def _hora(created_at: str) -> str:
+    try:
+        return datetime.fromisoformat(created_at).astimezone().strftime("%H:%M")
+    except (ValueError, TypeError):
+        return ""
 
 
 def _png(valor) -> bytes | None:
