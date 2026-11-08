@@ -68,6 +68,29 @@ class Base(unittest.TestCase):
         self.base = f"http://127.0.0.1:{httpd.server_address[1]}"
         return config
 
+    def enviar(self, texto, mid):
+        """Manda un mensaje del dueño y devuelve el texto que el bot contestó (o None)."""
+        salida = []
+
+        class R:
+            def read(s): return b'{"id": "m"}'
+            def close(s): pass
+
+        def falso(req, timeout=0):
+            salida.append(req)
+            return R()
+
+        with mock.patch("urllib.request.urlopen", falso):
+            self.post(evento(texto, mid=mid))
+        textos = [json.loads(r.data)["text"]["body"] for r in salida
+                  if r.full_url.endswith("/messages") and b'"text"' in r.data]
+        return textos[-1] if textos else None
+
+    def cobro_confirmado(self, mid):
+        borrador = self.enviar("cobra 0.01 al 5512345678", mid + "a")
+        codigo = borrador.split("confirmar ")[1][:6]
+        return self.enviar(f"confirmar {codigo}", mid + "b")
+
     def post(self, cuerpo, firmado=True, headers=None):
         h = {"Content-Type": "application/json"}
         if firmado:
@@ -75,7 +98,7 @@ class Base(unittest.TestCase):
         h.update(headers or {})
         req = urllib.request.Request(self.base + "/webhooks/whatsapp", data=cuerpo, headers=h)
         try:
-            with urllib.request.urlopen(req) as r:
+            with urllib.request.build_opener().open(req) as r:
                 return r.status
         except urllib.error.HTTPError as e:
             return e.code
@@ -113,10 +136,11 @@ class FirmaYDueno(Base):
 
 class Dedupe(Base):
     def test_repetido_recibe_200_sin_efecto(self):
-        self.levantar()
-        cuerpo = evento("cobra 0.01 al 5512345678", mid="wamid.dup")
-        self.assertEqual(self.post(cuerpo), 200)
-        self.assertEqual(self.post(cuerpo), 200)
+        self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+        borrador = self.enviar("cobra 0.01 al 5512345678", "wamid.d1")
+        confirmar = f"confirmar {borrador.split('confirmar ')[1][:6]}"
+        self.enviar(confirmar, "wamid.dup")
+        self.enviar(confirmar, "wamid.dup")
         self.assertEqual(self.pey.pushes, 1)
 
     def test_persiste_entre_reinicios(self):
@@ -142,10 +166,11 @@ class Topes(Base):
 
 class Limites_(Base):
     def test_cuarto_cobro_del_minuto_bloqueado(self):
-        self.levantar()
-        for i in range(4):
-            self.post(evento("cobra 0.01 al 5512345678", mid=f"c{i}"))
-        self.assertEqual(self.pey.pushes, 3)
+        self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+        respuestas = [self.enviar("cobra 0.01 al 5512345678", f"c{i}") for i in range(4)]
+        self.assertTrue(all("confirmar" in r for r in respuestas[:3]))
+        self.assertIn("Ya van 3 cobros", respuestas[3])
+        self.assertEqual(self.pey.pushes, 0)
 
     def test_mensaje_once_bloqueado(self):
         self.levantar()
@@ -156,8 +181,10 @@ class Limites_(Base):
         self.assertEqual(self.pey.pushes, 0)
 
     def test_sin_almacenamiento_bloquea_cobro(self):
-        self.levantar(limites_path="/no/existe/l.sqlite")
-        self.post(evento("cobra 0.01 al 5512345678"))
+        self.levantar(limites_path="/no/existe/l.sqlite",
+                      whatsapp_token="tok", whatsapp_phone_number_id="123")
+        respuesta = self.enviar("cobra 0.01 al 5512345678", "x1")
+        self.assertIn("no puedo cobrar", respuesta)
         self.assertEqual(self.pey.pushes, 0)
 
 
@@ -182,11 +209,18 @@ class Salida(Base):
                 self.base + "/webhooks/whatsapp", data=evento("manda el qr"),
                 headers={"X-Hub-Signature-256": firma(evento("manda el qr"))})
             urllib.request.build_opener().open(req).close()
+            borrador = [json.loads(r.data)["text"]["body"] for r in vistos
+                        if r.full_url.endswith("/messages")][-1]
+            cuerpo = evento(f"confirmar {borrador.split('confirmar ')[1][:6]}", mid="wamid.2")
+            req = urllib.request.Request(
+                self.base + "/webhooks/whatsapp", data=cuerpo,
+                headers={"X-Hub-Signature-256": firma(cuerpo)})
+            urllib.request.build_opener().open(req).close()
         urls = [r.full_url for r in vistos]
         self.assertTrue(any(u.endswith("/123/media") for u in urls), urls)
         enviado = [json.loads(r.data) for r in vistos if r.full_url.endswith("/messages")]
-        self.assertEqual(enviado[0]["type"], "image")
-        self.assertEqual(enviado[0]["image"]["id"], "media1")
+        self.assertEqual(enviado[-1]["type"], "image")
+        self.assertEqual(enviado[-1]["image"]["id"], "media1")
 
     def test_fallo_de_envio_se_registra_sin_telefono_ni_cuerpo(self):
         self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")

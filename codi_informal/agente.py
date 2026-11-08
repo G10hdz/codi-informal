@@ -196,14 +196,15 @@ def atender(entrada: dict, agente: Agente, transcribir=None) -> Resultado | None
     if tipo == "audio":
         if transcribir is None:
             return Resultado(VOZ_SIN_TRANSCRIPCION)
-        return agente.responder(transcribir(entrada.get("audio_id")))
+        return _responder(agente, transcribir(entrada.get("audio_id")), entrada)
     if tipo == "text":
-        return agente.responder(entrada.get("texto") or "")
+        return _responder(agente, entrada.get("texto") or "", entrada)
     return None
 
 
-def _referencia() -> str:
-    return str(int(time.time()))[-7:]
+def _responder(agente: Agente, texto, entrada: dict) -> Resultado:
+    quien = str(entrada.get("de") or "local")
+    return agente.responder(texto or "", quien, quien)
 
 
 def _png(valor) -> bytes | None:
