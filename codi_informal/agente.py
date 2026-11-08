@@ -226,9 +226,11 @@ class Agente:
 def atender(entrada: dict, agente: Agente, transcribir=None, *, dueno: str = "local", chat: str = "local") -> Resultado | None:
     tipo = entrada.get("tipo")
     if tipo == "audio":
-        if transcribir is None:
+        texto = transcribir(entrada.get("audio_id")) if transcribir else None
+        texto = " ".join(texto.split()) if isinstance(texto, str) else None
+        if not texto:
             return Resultado(VOZ_SIN_TRANSCRIPCION)
-        return agente.responder(transcribir(entrada.get("audio_id")), dueno=dueno, chat=chat)
+        return agente.responder(texto, dueno=dueno, chat=chat)
     if tipo == "text":
         return agente.responder(entrada.get("texto") or "", dueno=dueno, chat=chat)
     return None

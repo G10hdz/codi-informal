@@ -15,7 +15,8 @@ from unittest import mock
 
 from codi_informal.registro import abrir, crear_operacion, marcar_operacion
 from codi_informal.server import Config, handler
-from tests.test_esqueleto import SECRETO, firmar
+from tests.test_esqueleto import SECRETO, firmar, _Media
+from tests.test_multimodal import _Resp
 
 APP = "secreto-meta-prueba"
 DUENO = "5215500000001"
@@ -76,6 +77,15 @@ def evento(texto, de=DUENO, mid="wamid.1", para=""):
         "metadata": {"phone_number_id": para},
         "messages": [
             {"from": de, "id": mid, "type": "text", "text": {"body": texto}}
+        ]}}]}]}).encode()
+
+
+def evento_audio(mid, audio_id="aud1", para="", de=DUENO):
+    return json.dumps({"entry": [{"changes": [{"value": {
+        "metadata": {"phone_number_id": para},
+        "messages": [
+            {"from": de, "id": mid, "type": "audio",
+             "audio": {"id": audio_id, "mime_type": "audio/ogg; codecs=opus"}}
         ]}}]}]}).encode()
 
 
@@ -270,6 +280,75 @@ class Limites_(Base):
         self.levantar(limites_path="/no/existe/l.sqlite")
         self.assertEqual(self.post(evento("cobra 0.01 al 5512345678")), 503)
         self.assertEqual(self.pey.pushes, 0)
+
+
+class VozCableada(Base):
+    OGG = b"OggS\x00\x02" + (30 * 48000).to_bytes(8, "little") + b"\x00" * 20
+
+    def _media(self, req, timeout=0):
+        self.bajadas = getattr(self, "bajadas", [])
+        self.bajadas.append(req.full_url)
+        if req.full_url == "https://graph.facebook.com/v21.0/aud1":
+            return _Media(b'{"url": "https://lookaside.fbsbx.com/aud"}')
+        return _Media(self.OGG)
+
+    def _red(self, enviados, transcript="cobra 0.01 al 5512345678"):
+        def falso(req, timeout=0):
+            if "openrouter" in req.full_url:
+                if transcript is None:
+                    raise urllib.error.URLError("caido")
+                return _Resp(json.dumps(
+                    {"choices": [{"message": {"content": transcript}}]}).encode())
+            enviados.append(req)
+            return _Resp(b'{"id": "m1"}')
+        return falso
+
+    def _textos(self, enviados):
+        return [json.loads(r.data)["text"]["body"] for r in enviados
+                if r.full_url.endswith("/messages")]
+
+    def test_nota_de_voz_se_transcribe_y_cobra_lo_mismo(self):
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "key-or"}):
+            self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+            self.bajadas = []
+            enviados = []
+            with mock.patch("urllib.request.urlopen", self._red(enviados)), \
+                    mock.patch("codi_informal.whatsapp._abrir", self._media):
+                with _codigo_fijo():
+                    self.assertEqual(self.post(evento_audio("v1", para="123")), 200)
+                self.assertEqual(
+                    self.post(evento(f"confirmar {CODIGO}", mid="v2", para="123")), 200)
+            self.assertEqual(self.bajadas, [
+                "https://graph.facebook.com/v21.0/aud1",
+                "https://lookaside.fbsbx.com/aud",
+            ])
+            self.assertIn("confirmar", self._textos(enviados)[0])
+            self.assertEqual(self.pey.pushes, 1)
+
+    def test_sin_llave_de_openrouter_pide_el_texto(self):
+        with mock.patch.dict(os.environ) as env:
+            env.pop("OPENROUTER_API_KEY", None)
+            self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+
+            def no_media(req, timeout=0):
+                raise AssertionError("sin llave no se baja el audio")
+
+            enviados = []
+            with mock.patch("urllib.request.urlopen", self._red(enviados)), \
+                    mock.patch("codi_informal.whatsapp._abrir", no_media):
+                self.assertEqual(self.post(evento_audio("v3", para="123")), 200)
+            self.assertIn("nota de voz", self._textos(enviados)[0])
+            self.assertEqual(self.pey.pushes, 0)
+
+    def test_transcripcion_fallida_pide_la_orden_escrita(self):
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "key-or"}):
+            self.levantar(whatsapp_token="tok", whatsapp_phone_number_id="123")
+            enviados = []
+            with mock.patch("urllib.request.urlopen", self._red(enviados, transcript=None)), \
+                    mock.patch("codi_informal.whatsapp._abrir", self._media):
+                self.assertEqual(self.post(evento_audio("v4", para="123")), 200)
+            self.assertIn("nota de voz", self._textos(enviados)[0])
+            self.assertEqual(self.pey.pushes, 0)
 
 
 class Salida(Base):
