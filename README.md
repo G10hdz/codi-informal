@@ -1,5 +1,7 @@
 # Varísimo
 
+[Landing](https://varisimo.vercel.app) · [Video](https://youtu.be/Z2V4W_uf4ns) · [Release v0.1.0](https://github.com/G10hdz/codi-informal/releases/tag/v0.1.0)
+
 Varísimo es un bot de WhatsApp que cobra con CoDi para quien vende en la informalidad. Es el proyecto del equipo para el Hackatón OpenAI DevDay Exchange, Ciudad de México, 7 y 8 de noviembre de 2026. El repo se llama `codi-informal`.
 
 No hay frontend. El dueño escribe o manda una nota de voz, el bot pide el push o el QR a pey, y cuando el pago entra se lo avisa en el mismo chat.
@@ -9,6 +11,12 @@ La idea y el corte están en [IDEA.md](IDEA.md). Los campos de la API que sí us
 Los requisitos de seguridad antes de habilitar cobros están en [docs/guardrails.md](docs/guardrails.md).
 
 Diagramas de la arquitectura, de un cobro y de los estados de una operación, más un explicador interactivo: [docs/diagramas](docs/diagramas/README.md).
+
+## Cómo se ve
+
+![Arquitectura](docs/diagramas/arquitectura.svg)
+
+También hay un diagrama de [secuencia de un cobro](docs/diagramas/secuencia.svg), otro de los [estados de una operación](docs/diagramas/estados.svg) y un [explicador interactivo](docs/diagramas/como-funciona.html) con recorrido paso a paso, hecho con legibify, el skill de Gio.
 
 ## Estado
 
