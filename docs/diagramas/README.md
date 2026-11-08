@@ -11,7 +11,7 @@ Cómo está armado Varísimo y cómo viaja un cobro. Cada nodo y cada flecha apu
 
 Las páginas `.html` se abren en el navegador, con tema claro y oscuro. Los `.svg` se adaptan solos al tema del sistema. En el celular, el diagrama se desliza de lado.
 
-Explicador hecho con legibify, el skill de Gio.
+Explicador hecho con [legibify](https://github.com/G10hdz/legibify), el skill de Gio.
 
 ## Notas
 
