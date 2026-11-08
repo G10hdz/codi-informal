@@ -134,6 +134,10 @@ def handler(config: Config, conn, pey, limites=None):
                 self._json(400, {"error": "json inválido"})
                 return
             entrada = extraer(data)
+            # el evento tiene que ir dirigido a nuestro número; otro negocio de la app se ignora
+            if (entrada.get("phone_number_id") or "") != (config.whatsapp_phone_number_id or ""):
+                self._json(200, {"ok": True})
+                return
             if entrada.get("tipo") == "status":
                 self._json(200, {"ok": True})
                 return
