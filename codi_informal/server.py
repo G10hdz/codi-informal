@@ -15,7 +15,8 @@ from codi_informal.limites import Limites
 from codi_informal.pey import Pey
 from codi_informal.registro import abrir, aviso, registrar_pago
 from codi_informal.whatsapp import (
-    cuerpo_imagen, cuerpo_texto, descargar_media, extraer, firma_valida, multipart_imagen,
+    HOSTS_KAPSO, KAPSO_API, cuerpo_imagen, cuerpo_texto, descargar_media, extraer,
+    extraer_kapso, firma_kapso_valida, firma_valida, multipart_imagen,
 )
 
 log = logging.getLogger("codi_informal")
@@ -40,6 +41,11 @@ class Config:
         self.whatsapp_phone_number_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
         self.whatsapp_verify_token = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
         self.whatsapp_app_secret = os.environ.get("WHATSAPP_APP_SECRET", "")
+        self.whatsapp_provider = (
+            os.environ.get("WHATSAPP_PROVIDER", "meta").strip().lower() or "meta")
+        self.kapso_api_key = os.environ.get("KAPSO_API_KEY", "")
+        self.kapso_phone_number_id = os.environ.get("KAPSO_PHONE_NUMBER_ID", "")
+        self.kapso_webhook_secret = os.environ.get("KAPSO_WEBHOOK_SECRET", "")
         self.owner_whatsapp = os.environ.get("OWNER_WHATSAPP", "")
         self.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
         self.cobros_activos = os.environ.get("COBROS_ACTIVOS") != "0"
@@ -64,13 +70,24 @@ def _censurar(telefono) -> str:
     return "***" + "".join(c for c in str(telefono) if c.isdigit())[-4:]
 
 
+def _descargador(config: Config):
+    """media_id -> bytes del medio, por el proveedor configurado (Meta o Kapso)."""
+    if config.whatsapp_provider == "kapso":
+        return lambda media_id, **kw: descargar_media(
+            media_id, config.kapso_api_key, api=KAPSO_API,
+            auth={"X-API-Key": config.kapso_api_key}, hosts=HOSTS_KAPSO, **kw)
+    return lambda media_id, **kw: descargar_media(media_id, config.whatsapp_token, **kw)
+
+
 def crear_transcribir(config: Config):
-    """audio_id -> texto o None: baja el ogg de Meta, mide su duración y lo
+    """audio_id -> texto o None: baja el ogg del proveedor, mide su duración y lo
     transcribe con OpenRouter (REQ-8)."""
+    descargar = _descargador(config)
+
     def transcribir(audio_id):
         return voz.transcribir(
             audio_id,
-            descargar=lambda media_id, **kw: descargar_media(media_id, config.whatsapp_token, **kw),
+            descargar=descargar,
             transcriptor=openrouter.transcriptor,
             duracion=voz.duracion,
         )
@@ -80,9 +97,10 @@ def crear_transcribir(config: Config):
 def crear_lector(config: Config):
     """imagen_id -> {"monto", "concepto"} o None: baja la foto (5 MB) y la lee con
     OpenRouter. La imagen no toca disco ni el registro (REQ-15)."""
+    descargar = _descargador(config)
+
     def leer_imagen(imagen_id):
-        datos = descargar_media(imagen_id, config.whatsapp_token,
-                                max_bytes=MAX_IMAGEN, timeout=20)
+        datos = descargar(imagen_id, max_bytes=MAX_IMAGEN, timeout=20)
         if not datos:
             return None
         return ticket.leer(datos, lector=openrouter.lector)
@@ -159,21 +177,37 @@ def handler(config: Config, conn, pey, limites=None):
             self._json(200, {"texto": resultado.texto, "tiene_imagen": resultado.imagen is not None})
 
         def _whatsapp(self, cuerpo: bytes):
-            if not firma_valida(
-                config.whatsapp_app_secret,
-                cuerpo,
-                self.headers.get("X-Hub-Signature-256", ""),
-            ):
+            kapso = config.whatsapp_provider == "kapso"
+            if kapso:
+                valida = firma_kapso_valida(
+                    config.kapso_webhook_secret,
+                    cuerpo,
+                    self.headers.get("X-Webhook-Signature", ""),
+                )
+            else:
+                valida = firma_valida(
+                    config.whatsapp_app_secret,
+                    cuerpo,
+                    self.headers.get("X-Hub-Signature-256", ""),
+                )
+            if not valida:
                 self._json(401, {"error": "webhook rechazado"})
+                return
+            # Kapso manda el nombre del evento en la cabecera; solo atendemos received
+            evento = self.headers.get("X-Webhook-Event")
+            if kapso and evento is not None and evento != "whatsapp.message.received":
+                self._json(200, {"ok": True})
                 return
             try:
                 data = json.loads(cuerpo.decode() or "{}")
             except json.JSONDecodeError:
                 self._json(400, {"error": "json inválido"})
                 return
-            entrada = extraer(data)
-            # el evento tiene que ir dirigido a nuestro número; otro negocio de la app se ignora
-            if (entrada.get("phone_number_id") or "") != (config.whatsapp_phone_number_id or ""):
+            entrada = extraer_kapso(data) if kapso else extraer(data)
+            # el evento tiene que ir dirigido a nuestro número; otro negocio de la app se ignora.
+            # con Kapso no hay metadata.phone_number_id: el secreto del webhook cubre G01
+            if (not kapso and (entrada.get("phone_number_id") or "")
+                    != (config.whatsapp_phone_number_id or "")):
                 self._json(200, {"ok": True})
                 return
             if entrada.get("tipo") == "status":
@@ -279,12 +313,23 @@ def handler(config: Config, conn, pey, limites=None):
                     self._avisar(config.owner_whatsapp, texto)
             self._json(200, {"ok": True, "nuevo": nuevo, "aviso": texto})
 
+        def _salida(self):
+            if config.whatsapp_provider == "kapso":
+                if not config.kapso_api_key or not config.kapso_phone_number_id:
+                    return None
+                return (f"{KAPSO_API}/{config.kapso_phone_number_id}",
+                        {"X-API-Key": config.kapso_api_key})
+            if not config.whatsapp_token or not config.whatsapp_phone_number_id:
+                return None
+            return (f"https://graph.facebook.com/v21.0/{config.whatsapp_phone_number_id}",
+                    {"Authorization": f"Bearer {config.whatsapp_token}"})
+
         def _avisar(self, destino: str, texto: str, imagen: bytes | None = None,
                     texto_imagen: str | None = None):
-            if not config.whatsapp_token or not config.whatsapp_phone_number_id:
+            salida = self._salida()
+            if salida is None:
                 return
-            base = f"https://graph.facebook.com/v21.0/{config.whatsapp_phone_number_id}"
-            auth = {"Authorization": f"Bearer {config.whatsapp_token}"}
+            base, auth = salida
             try:
                 if imagen:
                     try:
