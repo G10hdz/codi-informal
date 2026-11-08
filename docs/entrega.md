@@ -10,10 +10,13 @@ Las instrucciones no piden un formato ni un video. Los jueces no van a correr el
 
 ## Antes de mandar
 
-- [ ] `main` desplegado, con el número de WhatsApp contestando.
-- [ ] Cobro real de $0.01 hecho y su commit anotado en el PR.
+- [x] `main` desplegado, con el número de WhatsApp contestando (sandbox de Kapso).
+- [x] Cobro real de $0.01 por push hecho el 8 de noviembre a las 11:47 sobre `e6511d8`: llegó la solicitud CoDi, se pagó y el bot avisó que entró el pago.
+- [ ] Cobro real de $0.01 por QR.
 - [ ] Repo público, o acceso dado a los jueces. Hoy es privado.
 - [ ] Sin CLABEs, teléfonos reales, tickets de personas ni `.env` en el repo ni en el video.
+
+El estado en palabras sencillas para el equipo está en [estado/estado-equipo.png](estado/estado-equipo.png).
 
 ## Qué lleva el correo
 

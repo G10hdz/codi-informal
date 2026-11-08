@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<title>Varísimo: cómo vamos</title>
+<!-- Estado del proyecto en palabras sencillas, para la señora Altagracia y el resto del equipo. -->
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff7ec;--ink:#1d1a16;--muted:#6b6258;--rosa:#e8457a;--verde:#1f8a5b;--amarillo:#ffcf3f;--card:#ffffff;--line:#efe3d3}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1080px;height:1470px;background:var(--bg);font-family:Inter,sans-serif;color:var(--ink);padding:64px 72px;position:relative;overflow:hidden}
+body:before{content:"";position:absolute;top:0;left:0;right:0;height:18px;background:repeating-linear-gradient(90deg,var(--rosa) 0 60px,var(--amarillo) 60px 120px,var(--verde) 120px 180px)}
+.top{display:flex;justify-content:space-between;align-items:flex-end;margin-top:12px}
+h1{font-family:'Bricolage Grotesque';font-weight:800;font-size:104px;letter-spacing:-3px;line-height:.9}
+h1 span{color:var(--rosa)}
+.fecha{font-size:24px;color:var(--muted);text-align:right;line-height:1.4}
+.para{display:inline-block;margin-top:14px;background:var(--amarillo);color:var(--ink);font-weight:600;font-size:22px;padding:6px 14px;border-radius:999px}
+.sub{font-size:30px;color:var(--muted);margin-top:14px}
+.hito{margin-top:32px;background:var(--ink);color:#fff;border-radius:28px;padding:34px 40px;display:flex;align-items:center;gap:32px}
+.monto{font-family:'Bricolage Grotesque';font-weight:800;font-size:96px;color:var(--amarillo);line-height:1}
+.hito p{font-size:30px;line-height:1.35}
+.hito b{color:var(--amarillo)}
+h2{font-family:'Bricolage Grotesque';font-weight:700;font-size:38px;margin:34px 0 16px}
+.pasos{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.paso{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:22px 20px;min-height:0}
+.num{width:48px;height:48px;border-radius:50%;background:var(--verde);color:#fff;font-family:'Bricolage Grotesque';font-weight:800;font-size:26px;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+.paso p{font-size:23px;line-height:1.35}
+.paso q{font-weight:600;quotes:"“" "”"}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.box{background:var(--card);border:2px solid var(--line);border-radius:22px;padding:26px 30px}
+.box h3{font-family:'Bricolage Grotesque';font-size:30px;margin-bottom:12px}
+.box ul{list-style:none}
+.box li{font-size:24px;line-height:1.4;padding-left:34px;position:relative;margin:8px 0}
+.si li:before{content:"✓";position:absolute;left:0;color:var(--verde);font-weight:800}
+.falta li:before{content:"○";position:absolute;left:2px;color:var(--rosa);font-weight:800}
+.falta{border-color:#f6c4d4}
+.pie{margin-top:28px;font-size:24px;color:var(--muted);border-top:2px dashed var(--line);padding-top:22px}
+.pie b{color:var(--ink)}
+</style></head><body>
+<div class="top">
+  <div><h1>Varí<span>simo</span></h1><div class="sub">Cómo vamos</div><div class="para">Para la señora Altagracia y el equipo</div></div>
+  <div class="fecha">Domingo 8 de noviembre<br>11:55 a. m.</div>
+</div>
+
+<div class="hito">
+  <div class="monto">$0.01</div>
+  <p><b>¡Ya cobramos de verdad!</b><br>Primer cobro real por WhatsApp con CoDi. Se pagó desde el banco y el bot avisó solito que entró el dinero.</p>
+</div>
+
+<h2>Así funciona hoy</h2>
+<div class="pasos">
+  <div class="paso"><div class="num">1</div><p>Le escribes al bot <q>cobra 10 al 55…</q> o le mandas una nota de voz.</p></div>
+  <div class="paso"><div class="num">2</div><p>Te pide un código para confirmar. Nada se cobra sin tu sí.</p></div>
+  <div class="paso"><div class="num">3</div><p>Al cliente le llega el cobro en la app de su banco.</p></div>
+  <div class="paso"><div class="num">4</div><p>Paga y el bot te avisa <q>Entró un pago</q>.</p></div>
+</div>
+
+<h2>Dónde estamos</h2>
+<div class="cols">
+  <div class="box si"><h3>Listo</h3><ul>
+    <li>El bot ya vive en internet</li>
+    <li>Contesta por WhatsApp</li>
+    <li>Entiende notas de voz y fotos de ticket</li>
+    <li>Cobro por CoDi y aviso de pago</li>
+  </ul></div>
+  <div class="box falta"><h3>Falta antes de la 1</h3><ul>
+    <li>Grabar el video del demo</li>
+    <li>Compartir el código con los jueces</li>
+    <li>Mandar el correo de entrega</li>
+  </ul></div>
+</div>
+
+<div class="pie"><b>Después del hackatón:</b> que cada puesto tenga su propia cuenta, para que lo usen varios a la vez. Y luego la tanda.</div>
+</body></html>
