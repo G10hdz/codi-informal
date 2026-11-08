@@ -114,6 +114,24 @@ class TicketTests(unittest.TestCase):
         r = ticket.leer(b"img", lector=lambda b: {"monto": "125.50", "concepto": "Tacos"})
         self.assertEqual(r, {"monto": Decimal("125.50"), "concepto": "Tacos"})
 
+    def test_acepta_solo_formatos_de_dinero_explicitos(self):
+        casos = {
+            "12": Decimal("12"),
+            "12.50": Decimal("12.50"),
+            "1,234.50": Decimal("1234.50"),
+            "1234": Decimal("1234"),
+            "1,234": Decimal("1234"),
+            "12,345,678.90": Decimal("12345678.90"),
+        }
+        for crudo, esperado in casos.items():
+            r = ticket.leer(b"i", lector=lambda b, c=crudo: {"monto": c, "concepto": "x"})
+            self.assertEqual(r["monto"], esperado)
+
+    def test_rechaza_montos_ambiguos(self):
+        for malo in ("0,01", "1,2,3", "12.5", "12,34", "1,23,456", "1.234", ".50",
+                     "12.", "1e2", "+5", "1 234.50"):
+            self.assertIsNone(ticket.leer(b"i", lector=lambda b, c=malo: {"monto": c, "concepto": "x"}))
+
     def test_sin_monto_o_monto_invalido_es_none(self):
         for crudo in ({}, {"monto": ""}, {"monto": "abc"}, {"monto": "0"}, {"monto": "-5"},
                       {"monto": "NaN"}, {"monto": "Infinity"}, {"monto": "1.005"}):
