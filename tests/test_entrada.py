@@ -166,6 +166,20 @@ class FirmaYDueno(Base):
         self.assertEqual(self.pey.pushes, 0)
 
 
+class Identidad(Base):
+    def test_otro_chat_no_confirma_el_borrador(self):
+        self.levantar()
+        with _codigo_fijo():
+            self.assertEqual(self.post(evento("cobra 0.01 al 5512345678", mid="i1")), 200)
+        # el mismo dueño con otro wa id es otro chat: no consume la confirmación
+        self.assertEqual(
+            self.post(evento(f"confirmar {CODIGO}", de="5500000001", mid="i2")), 200)
+        self.assertEqual(self.pey.pushes, 0)
+        # el chat que pidió el cobro sí confirma
+        self.assertEqual(self.post(evento(f"confirmar {CODIGO}", mid="i3")), 200)
+        self.assertEqual(self.pey.pushes, 1)
+
+
 class Dedupe(Base):
     def test_repetido_recibe_200_sin_efecto(self):
         self.levantar()
