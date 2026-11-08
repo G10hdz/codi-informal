@@ -230,9 +230,17 @@ class OperacionTests(Base):
         self.assertEqual(self.llamadas, [])
         self.cobrar_y_confirmar(a)
         self.assertEqual(self.llamadas[0][1]["concept"], "Taco")
-        self.assertIn("no cobra", a.cobrar("123", "0.01", "x").texto.lower() + "no cobra")
-        self.assertNotIn("confirmar", a.cobrar("123", "0.01", "x").texto)
-        self.assertNotIn("confirmar", a.cobrar(TEL, "0.005", "x").texto)
+        antes = len(self.llamadas)
+        mal_tel = a.cobrar("123", "0.01", "x")
+        self.assertEqual(mal_tel.texto, "El celular tiene que ser de 10 dígitos.")
+        self.assertNotIn("confirmar", mal_tel.texto)
+        mal_monto = a.cobrar(TEL, "0.005", "x")
+        self.assertEqual(
+            mal_monto.texto,
+            "No entendí el monto. Usa pesos con hasta dos decimales, por ejemplo 0.01.",
+        )
+        self.assertNotIn("confirmar", mal_monto.texto)
+        self.assertEqual(len(self.llamadas), antes)
 
     def test_guarda_la_operacion_antes_de_llamar_a_pey(self):
         self.cobrar_y_confirmar(self.agente())
