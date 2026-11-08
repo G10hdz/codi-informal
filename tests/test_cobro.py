@@ -359,6 +359,38 @@ class ConciliacionTests(Base):
         registrar_pago(self.conn, self.evento(transactionId="otra"), "w1")
         self.assertEqual(self.op()["estado"], "creada")
 
+    def test_evento_desconocido_no_cuenta_como_recibido(self):
+        self.creada()
+        nuevo = registrar_pago(self.conn, self.evento(transactionId="otra"), "w1")
+        self.assertFalse(nuevo)
+        self.assertEqual(self.conn.execute("select count(*) from pagos").fetchone()[0], 0)
+        self.assertEqual(listar(self.conn), [])
+
+    def test_evento_sin_operacion_no_cuenta_como_recibido(self):
+        nuevo = registrar_pago(self.conn, self.evento(), "w1")
+        self.assertFalse(nuevo)
+        self.assertEqual(listar(self.conn), [])
+
+    def test_monto_distinto_no_cuenta_como_recibido(self):
+        self.creada()
+        nuevo = registrar_pago(self.conn, self.evento(amount=0.02), "w1")
+        self.assertFalse(nuevo)
+        self.assertEqual(self.op()["estado"], "pendiente")
+        self.assertEqual(listar(self.conn), [])
+
+    def test_cuenta_distinta_no_cuenta_como_recibido(self):
+        self.creada()
+        nuevo = registrar_pago(self.conn, self.evento(bankAccountId="01ZZZZZZZZZZZZZZZZZZZZZZZZ"), "w1")
+        self.assertFalse(nuevo)
+        self.assertEqual(self.op()["estado"], "pendiente")
+        self.assertEqual(listar(self.conn), [])
+
+    def test_coincide_cuenta_como_recibido(self):
+        self.creada()
+        self.assertTrue(registrar_pago(self.conn, self.evento(), "w1"))
+        self.assertEqual(self.op()["estado"], "pagado")
+        self.assertEqual(len(listar(self.conn)), 1)
+
     def test_qr_se_concilia_por_codi_qr_id(self):
         self.creada(qr=True)
         registrar_pago(self.conn, self.evento(type="codi.qr.payment_received", codiQrId="qr1",
