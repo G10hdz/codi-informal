@@ -1,6 +1,7 @@
 import os
 import unittest
 from decimal import Decimal
+from unittest import mock
 
 from codi_informal import idioma, ticket, voz
 
@@ -14,7 +15,8 @@ class VozTests(unittest.TestCase):
             self.assertTrue(os.path.exists(ruta))
             return "cobra 0.01 al 5512345678"
 
-        texto = voz.transcribir("abc123", descargar=lambda i, **k: b"x" * 10, transcriptor=transcriptor)
+        texto = voz.transcribir("abc123", descargar=lambda i, **k: b"x" * 10, transcriptor=transcriptor,
+                                duracion=lambda r: 30)
         self.assertEqual(texto, "cobra 0.01 al 5512345678")
         self.assertFalse(os.path.exists(vistos[0]))
 
@@ -25,7 +27,8 @@ class VozTests(unittest.TestCase):
             vistos.append(ruta)
             raise RuntimeError("boom")
 
-        self.assertIsNone(voz.transcribir("abc", descargar=lambda i, **k: b"x", transcriptor=transcriptor))
+        self.assertIsNone(voz.transcribir("abc", descargar=lambda i, **k: b"x", transcriptor=transcriptor,
+                                          duracion=lambda r: 30))
         self.assertFalse(os.path.exists(vistos[0]))
 
     def test_sin_transcriptor_devuelve_none_sin_descargar(self):
@@ -44,13 +47,30 @@ class VozTests(unittest.TestCase):
     def test_rechaza_mas_de_5mb(self):
         t = lambda r: self.fail("no debe transcribir")
         grande = b"x" * (5 * 1024 * 1024 + 1)
-        self.assertIsNone(voz.transcribir("abc", descargar=lambda i, **k: grande, transcriptor=t))
+        self.assertIsNone(voz.transcribir("abc", descargar=lambda i, **k: grande, transcriptor=t,
+                                          duracion=lambda r: 30))
 
     def test_rechaza_mas_de_60s(self):
         t = lambda r: self.fail("no debe transcribir")
         self.assertIsNone(
             voz.transcribir("abc", descargar=lambda i, **k: b"x", transcriptor=t, duracion=lambda r: 61)
         )
+
+    def test_sin_duracion_no_transcribe(self):
+        t = mock.Mock(return_value="hola")
+        self.assertIsNone(voz.transcribir("abc", descargar=lambda i, **k: b"x", transcriptor=t))
+        t.assert_not_called()
+
+    def test_duracion_inverificable_no_transcribe(self):
+        t = mock.Mock(return_value="hola")
+
+        def falla(ruta):
+            raise RuntimeError("no se pudo verificar")
+
+        for duracion in (lambda r: float("nan"), lambda r: -5, lambda r: "largo", falla):
+            self.assertIsNone(voz.transcribir("abc", descargar=lambda i, **k: b"x", transcriptor=t,
+                                              duracion=duracion))
+            t.assert_not_called()
 
     def test_pasa_timeout_y_tope_a_descargar_y_tolera_fallos(self):
         pedido = {}
@@ -59,12 +79,14 @@ class VozTests(unittest.TestCase):
             pedido.update(k)
             raise TimeoutError
 
-        self.assertIsNone(voz.transcribir("abc", descargar=descargar, transcriptor=lambda r: "x"))
+        self.assertIsNone(voz.transcribir("abc", descargar=descargar, transcriptor=lambda r: "x",
+                                          duracion=lambda r: 30))
         self.assertEqual(pedido["max_bytes"], 5 * 1024 * 1024)
         self.assertGreater(pedido["timeout"], 0)
 
     def test_transcripcion_vacia_es_none(self):
-        self.assertIsNone(voz.transcribir("abc", descargar=lambda i, **k: b"x", transcriptor=lambda r: "  "))
+        self.assertIsNone(voz.transcribir("abc", descargar=lambda i, **k: b"x", transcriptor=lambda r: "  ",
+                                          duracion=lambda r: 30))
 
 
 class IdiomaTests(unittest.TestCase):
