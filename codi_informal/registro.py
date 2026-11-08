@@ -1,10 +1,13 @@
 """Registro local de pagos. No guarda CLABEs ni el cuerpo crudo del webhook."""
 
+import secrets
 import sqlite3
 import threading
 from datetime import datetime, timezone
 
-_CANDADO = threading.Lock()
+from codi_informal.pey import centavos
+
+_CANDADO = threading.RLock()
 
 
 def abrir(path: str) -> sqlite3.Connection:
@@ -26,8 +29,76 @@ def abrir(path: str) -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        create table if not exists operaciones (
+            op_id text primary key,
+            dueno text not null,
+            chat text not null,
+            tipo text not null,
+            amount_cents integer not null,
+            concept text,
+            num_ref text unique,
+            bank_account_id text,
+            estado text not null,
+            pey_transaction_id text,
+            codi_qr_id text,
+            created_at text not null
+        )
+        """
+    )
     conn.commit()
     return conn
+
+
+def crear_operacion(conn, dueno, chat, tipo, amount_cents, concept, bank_account_id=None) -> dict:
+    """Guarda la operación en estado 'creando' ANTES de llamar a pey."""
+    with _CANDADO:
+        for _ in range(10):
+            op_id = secrets.token_hex(8)
+            num_ref = f"{secrets.randbelow(10**7):07d}"
+            try:
+                conn.execute(
+                    "insert into operaciones (op_id, dueno, chat, tipo, amount_cents, concept,"
+                    " num_ref, bank_account_id, estado, created_at) values (?,?,?,?,?,?,?,?,?,?)",
+                    (op_id, dueno, chat, tipo, amount_cents, concept, num_ref,
+                     bank_account_id or None, "creando", datetime.now(timezone.utc).isoformat()),
+                )
+            except sqlite3.IntegrityError:
+                continue
+            conn.commit()
+            return {"op_id": op_id, "num_ref": num_ref}
+    raise RuntimeError("no se pudo reservar la operación")
+
+
+def marcar_operacion(conn, op_id, estado, transaction_id=None, qr_id=None) -> None:
+    with _CANDADO:
+        conn.execute(
+            "update operaciones set estado=?, pey_transaction_id=coalesce(?, pey_transaction_id),"
+            " codi_qr_id=coalesce(?, codi_qr_id) where op_id=?",
+            (estado, transaction_id, qr_id, op_id),
+        )
+        conn.commit()
+
+
+def _conciliar(conn, evento: dict, transaction_id: str) -> None:
+    """Push se liga por transactionId, QR por codiQrId. Monto y cuenta tienen que coincidir."""
+    if evento.get("type") == "codi.qr.payment_received":
+        qr_id = evento.get("codiQrId")
+        fila = conn.execute("select * from operaciones where codi_qr_id=?", (str(qr_id),)).fetchone() if qr_id else None
+    else:
+        fila = conn.execute("select * from operaciones where pey_transaction_id=?", (transaction_id,)).fetchone()
+    if fila is None:
+        return
+    try:
+        monto = centavos(evento.get("amount"))
+    except ValueError:
+        monto = None
+    cuenta = evento.get("bankAccountId")
+    # sin cuenta en el evento o en la operación, es la cuenta ligada a la key
+    cuenta_ok = not cuenta or not fila["bank_account_id"] or cuenta == fila["bank_account_id"]
+    estado = "pagado" if monto == fila["amount_cents"] and cuenta_ok else "pendiente"
+    conn.execute("update operaciones set estado=? where op_id=?", (estado, fila["op_id"]))
 
 
 def registrar_pago(conn: sqlite3.Connection, evento: dict, webhook_id: str | None = None) -> bool:
@@ -63,8 +134,11 @@ def _insertar(conn, evento, webhook_id, transaction_id, tipo, externo) -> bool:
             datetime.now(timezone.utc).isoformat(),
         ),
     )
+    nuevo = cursor.rowcount == 1
+    if nuevo:
+        _conciliar(conn, evento, str(transaction_id))
     conn.commit()
-    return cursor.rowcount == 1
+    return nuevo
 
 
 def listar(conn: sqlite3.Connection, limite: int = 10) -> list[dict]:
