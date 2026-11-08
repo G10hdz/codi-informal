@@ -36,6 +36,13 @@ curl -s localhost:8787/mensaje \
   -d '{"texto":"cobra 0.01 al 5512345678"}'
 ```
 
+Si pey no contesta a tiempo, el cobro queda incierto y ese dueño no puede pedir otro. El operador lo revisa en pey y lo cierra:
+
+```bash
+PYTHONPATH=. python3 -m codi_informal.registro                          # lista los inciertos
+PYTHONPATH=. python3 -m codi_informal.registro resolver <op_id> fallida  # o creada, si sí salió
+```
+
 ## Equipo
 
 - Gio: https://github.com/G10hdz

@@ -70,8 +70,17 @@ def abrir(path: str) -> sqlite3.Connection:
 
 
 def crear_operacion(conn, dueno, chat, tipo, amount_cents, concept, bank_account_id=None) -> dict:
-    """Guarda la operación en estado 'creando' ANTES de llamar a pey."""
+    """Guarda la operación en estado 'creando' ANTES de llamar a pey.
+
+    Devuelve None si el dueño ya tiene una operación creando o incierta: revisar y
+    reservar van bajo el mismo candado para que dos confirmaciones no manden dos POST.
+    """
     with _CANDADO:
+        if conn.execute(
+            "select 1 from operaciones where dueno=? and estado in ('creando', 'incierto') limit 1",
+            (dueno,),
+        ).fetchone():
+            return None
         for _ in range(10):
             op_id = secrets.token_hex(8)
             num_ref = f"{secrets.randbelow(10**7):07d}"
@@ -323,3 +332,38 @@ def _texto(valor) -> str | None:
     if valor is None:
         return None
     return str(valor)
+
+
+def inciertos(conn) -> list[dict]:
+    """Operaciones que quedaron en duda y bloquean cobros nuevos de su dueño."""
+    with _CANDADO:
+        filas = conn.execute(
+            "select op_id, tipo, amount_cents, created_at from operaciones"
+            " where estado='incierto' order by created_at"
+        ).fetchall()
+    return [dict(f) for f in filas]
+
+
+def resolver(conn, op_id, estado) -> bool:
+    """El operador cierra un incierto después de revisarlo en pey: 'fallida' si no se creó,
+    'creada' si sí. Solo toca operaciones inciertas."""
+    if estado not in ("fallida", "creada"):
+        return False
+    with _CANDADO:
+        cur = conn.execute(
+            "update operaciones set estado=? where op_id=? and estado='incierto'", (estado, op_id)
+        )
+        conn.commit()
+    return cur.rowcount == 1
+
+
+if __name__ == "__main__":
+    import os
+    import sys
+
+    _conn = abrir(os.environ.get("REGISTRO_PATH", "data/registro.sqlite"))
+    if sys.argv[1:2] == ["resolver"] and len(sys.argv) == 4:
+        print("listo" if resolver(_conn, sys.argv[2], sys.argv[3]) else "no se cambió nada")
+    else:
+        for _op in inciertos(_conn):
+            print(_op["op_id"], _op["tipo"], _op["amount_cents"], _op["created_at"])

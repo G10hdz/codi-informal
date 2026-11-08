@@ -23,6 +23,7 @@ INCIERTO = (
     "No sé si el cobro salió: pey no respondió a tiempo. No lo reintento para no cobrar doble. "
     "Revisa con el operador antes de pedirlo otra vez."
 )
+EN_CURSO = "Hay otro cobro en curso o sin resolver. Espera a que termine antes de pedir otro."
 BLOQUEO_INCIERTO = (
     "Tienes un cobro sin resolver: el anterior quedó en duda y pudo haberse creado. "
     "Revísalo con el operador antes de pedir otro, para no cobrar doble."
@@ -129,6 +130,8 @@ class Agente:
 
     def _ejecutar_push(self, datos, dueno, chat) -> Resultado:
         op = self._crear(datos, dueno, chat)
+        if op is None:
+            return Resultado(EN_CURSO)
         try:
             respuesta = self.pey.push(
                 amount=pesos(datos["cents"]),
@@ -171,6 +174,8 @@ class Agente:
 
     def _ejecutar_qr(self, datos, dueno, chat) -> Resultado:
         op = self._crear(datos, dueno, chat)
+        if op is None:
+            return Resultado(EN_CURSO)
         try:
             respuesta = self.pey.qr(
                 amount=pesos(datos["cents"]),
