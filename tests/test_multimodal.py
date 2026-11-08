@@ -45,16 +45,18 @@ class VozTests(unittest.TestCase):
             self.assertIsNone(voz.transcribir(malo, descargar=descargar, transcriptor=lambda r: "hola"))
 
     def test_rechaza_mas_de_5mb(self):
-        t = lambda r: self.fail("no debe transcribir")
+        t = mock.Mock(return_value="hola")
         grande = b"x" * (5 * 1024 * 1024 + 1)
         self.assertIsNone(voz.transcribir("abc", descargar=lambda i, **k: grande, transcriptor=t,
                                           duracion=lambda r: 30))
+        t.assert_not_called()
 
     def test_rechaza_mas_de_60s(self):
-        t = lambda r: self.fail("no debe transcribir")
+        t = mock.Mock(return_value="hola")
         self.assertIsNone(
             voz.transcribir("abc", descargar=lambda i, **k: b"x", transcriptor=t, duracion=lambda r: 61)
         )
+        t.assert_not_called()
 
     def test_sin_duracion_no_transcribe(self):
         t = mock.Mock(return_value="hola")
