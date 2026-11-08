@@ -47,7 +47,15 @@ El detalle está en [docs/guardrails.md](docs/guardrails.md).
 
 ![Arquitectura](docs/diagramas/arquitectura.svg)
 
-Python con solo la biblioteca estándar, SQLite y un contenedor en un VPS. También hay un diagrama de [secuencia de un cobro](docs/diagramas/secuencia.svg), otro de los [estados de una operación](docs/diagramas/estados.svg) y un [explicador interactivo](docs/diagramas/como-funciona.html) con recorrido paso a paso, hecho con legibify, el skill de Gio.
+Python con solo la biblioteca estándar, SQLite y un contenedor en un VPS. También hay un diagrama de [secuencia de un cobro](docs/diagramas/secuencia.svg) y otro de los [estados de una operación](docs/diagramas/estados.svg).
+
+### Un cobro, paso a paso
+
+![Explicador: un cobro recorre el webhook, el agente, pey y el registro](docs/diagramas/como-funciona.gif)
+
+[Abrir el explicador interactivo](https://htmlpreview.github.io/?https://github.com/G10hdz/codi-informal/blob/main/docs/diagramas/como-funciona.html): con clic en cada caja se ve su archivo y su línea, y las flechas avanzan los pasos.
+
+Los diagramas y el explicador se hicieron con [legibify](https://github.com/G10hdz/legibify), el skill de Gio para explicar código con diagramas que se pueden recorrer.
 
 La idea y el corte están en [IDEA.md](IDEA.md). Los campos de pey que sí usamos están en [docs/pey-api.md](docs/pey-api.md).
 
