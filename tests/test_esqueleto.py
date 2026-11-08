@@ -154,6 +154,13 @@ class WhatsAppTests(unittest.TestCase):
         self.assertIn("5512345678", con_texto.texto)
         self.assertIn("Falta PEY_API_KEY", con_texto.texto)
 
+    def test_cobra_con_palabra_numero_antes_del_telefono(self):
+        agente = Agente(None, None, max_amount="0.01")
+        for texto in ("Cobra 0.01 al número 5598765432", "cobra 0.01 al numero 5598765432",
+                      "cobra 0.01 al cel 5598765432", "cobra 0.01 al teléfono 5598765432"):
+            r = atender({"tipo": "text", "texto": texto}, agente)
+            self.assertIn("Entendí: cobrar", r.texto, texto)
+
     def test_transcripcion_fallida_pide_la_orden_escrita(self):
         agente = Agente(None, None, max_amount="0.01")
         for texto in (None, "", "   "):

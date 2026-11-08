@@ -39,7 +39,7 @@ PAUSADOS = (
 )
 
 _COBRA = re.compile(
-    r"cobra(?:r|me)?\s+\$?\s*(-?[\d.,]+)\s*(?:pesos?)?\s*(?:a|al)\s*([+\d][\d\s-]{8,22})",
+    r"cobra(?:r|me)?\s+\$?\s*(-?[\d.,]+)\s*(?:pesos?)?\s*(?:a|al)\s*(?:(?:n[uú]mero|cel(?:ular)?|tel[eé]fono)\s*)?([+\d][\d\s-]{8,22})",
     re.IGNORECASE,
 )
 _CONFIRMA = re.compile(r"confirmar\s+([0-9A-F]{6})", re.IGNORECASE)
